@@ -69,6 +69,7 @@ impl Compiler {
             returns,
             args,
             body,
+            lvars: vec![],
         };
         let obj = HirObj::new(kind, ());
         self.commit(obj, span_start)

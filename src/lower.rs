@@ -29,12 +29,14 @@ impl Compiler {
                 returns,
                 args,
                 body,
+                lvars,
             } => {
                 buf.push(Function(name.inner));
-                buf.push(Prologue);
+                for (lvar, ty) in lvars {
+                    buf.push(Alloc(ty, lvar));
+                }
                 self.lower_stmt(buf, *body);
-                buf.push(Epilogue);
-                self.commit_bb(None, buf, Ret);
+                self.commit_bb(None, buf, buf.last().copied().unwrap());
                 std::mem::take(&mut self.bbs)
             }
             TirObjKind::Global { lhs, rhs } => todo!(),

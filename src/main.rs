@@ -50,15 +50,7 @@ fn main() {
     let f = comp.check_obj(f);
     let mut lir_buf = vec![];
     let bbs = comp.lower_obj(&mut lir_buf, f);
-    println!("\n\nRAW:");
-    for bb in bbs.iter() {
-        println!("BB #{}:", bb.id);
-        for i in bb.instructions.iter() {
-            println!("{i}");
-        }
-    }
 
-    println!("\n\nAFTER CONSTANT FOLDING + DEAD CODE ELIMINATION:");
     for mut bb in bbs {
         comp.const_fold_bb(&mut bb);
         for i in bb.instructions.iter() {

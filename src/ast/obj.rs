@@ -19,6 +19,7 @@ pub enum ObjKind<M, N, T, I> {
         returns: Spanned<T>,
         args: Vec<(Spanned<I>, Spanned<T>)>,
         body: Box<Spanned<Stmt<M, N, T, I>>>,
+        lvars: Vec<(I, T)>,
     },
     Global {
         lhs: Spanned<I>,

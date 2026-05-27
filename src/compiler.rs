@@ -16,6 +16,7 @@ pub struct Compiler {
     pub type_env: Env<Id>,
     pub var_store: Store<&'static str>,
     pub return_type: Id,
+    pub current_fn_lvars: Vec<(&'static str, Id)>,
 
     // Lowering shit
     pub reg_count: usize,

@@ -1,4 +1,4 @@
-use crate::ast::*;
+use crate::{ast::*, tir::Id};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RegId(pub usize);
@@ -19,9 +19,8 @@ impl std::fmt::Display for Lbl {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Instr {
-    Prologue,
-    Epilogue,
     Function(&'static str),
+    Alloc(Id, &'static str),
     Label(Lbl),
     Const {
         dst: RegId,
@@ -71,31 +70,33 @@ pub enum Instr {
         loc: &'static str,
         dst: Option<RegId>,
     },
-    Ret,
+    Ret {
+        rs1: Option<RegId>,
+    },
 }
 
 impl std::fmt::Display for Instr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         #[rustfmt::skip]
         let s = match self {
-            Instr::Const { dst, imm }           => format!("\t{dst} <- {imm}"),
-            Instr::Copy { dst, rs1 }            => format!("\t{dst} <- {rs1}"),
-            Instr::Bin { dst, op, rs1, rs2 }    => format!("\t{dst} <- {rs1} {op} {rs2}"),
-            Instr::Un { dst, op, rs1 }          => format!("\t{dst} <- {op} {rs1}"),
-            Instr::AddrOf { dst, src }          => format!("\t{dst} <- &{src}"),
-            Instr::Read { dst, loc }            => format!("\t{dst} <- load `{loc}`"),
-            Instr::Write { loc, rs1 }           => format!("\tstore `{loc}` <- {rs1}"),
+            Instr::Alloc(ty, name)              => format!("\talloc {ty} `{name}`"),
+            Instr::Const { dst, imm }           => format!("\t{dst} = {imm}"),
+            Instr::Copy { dst, rs1 }            => format!("\t{dst} = {rs1}"),
+            Instr::Bin { dst, op, rs1, rs2 }    => format!("\t{dst} = {rs1} {op} {rs2}"),
+            Instr::Un { dst, op, rs1 }          => format!("\t{dst} = {op} {rs1}"),
+            Instr::AddrOf { dst, src }          => format!("\t{dst} = &{src}"),
+            Instr::Read { dst, loc }            => format!("\t{dst} = load `{loc}`"),
+            Instr::Write { loc, rs1 }           => format!("\tstore {rs1}, `{loc}`"),
             Instr::Label(lbl)                   => format!("{lbl}:"),
-            Instr::Br { rs1: cond, lbl1, lbl2  }     => format!("\tbr {cond}, {lbl1}, {lbl2}"),
+            Instr::Br { rs1, lbl1, lbl2  }      => format!("\tbr {rs1}, {lbl1}, {lbl2}"),
             Instr::Jmp { lbl }                  => format!("\tjmp {lbl}"),
             Instr::Function(name)               => format!(".F{name}:"),
-            Instr::Arg { num, rs1, ret: true }  => format!("\targ#{num} <- {rs1}"),
-            Instr::Arg { num, rs1, ret: false } => format!("\tret#{num} <- {rs1}"),
-            Instr::Call { loc, dst: Some(dst) } => format!("\t{dst} <- call {loc}"),
+            Instr::Arg { num, rs1, ret: true }  => format!("\targ#{num} = {rs1}"),
+            Instr::Arg { num, rs1, ret: false } => format!("\tret#{num} = {rs1}"),
+            Instr::Call { loc, dst: Some(dst) } => format!("\t{dst} = call {loc}"),
             Instr::Call { loc, dst: None }      => format!("\tcall {loc}"),
-            Instr::Prologue                     => format!("\t<prologue>"),
-            Instr::Epilogue                     => format!("\t<epilogue>"),
-            Instr::Ret                          => format!("\tret"),
+            Instr::Ret { rs1: Some(val) }       => format!("\tret {val}"),
+            Instr::Ret { rs1: None }            => format!("\tret"),
         };
         f.write_str(&s)
     }

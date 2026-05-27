@@ -41,6 +41,7 @@ impl Compiler {
                 returns,
                 args,
                 body,
+                ..
             } => {
                 self.type_env.push_scope();
                 let mut checked_args = vec![];
@@ -64,8 +65,9 @@ impl Compiler {
                 let kind = TirObjKind::Fn {
                     name,
                     returns,
-                    args: checked_args,
                     body,
+                    args: checked_args,
+                    lvars: std::mem::take(&mut self.current_fn_lvars),
                 };
                 TirObj::new(kind, id)
             }
@@ -89,6 +91,7 @@ impl Compiler {
                     );
                 }
                 self.type_env.insert(lhs.inner, rhs.inner.meta);
+                self.current_fn_lvars.push((lhs.inner, rhs.inner.meta));
                 let kind = TirStmtKind::Let { lhs, ty, rhs };
                 TirStmt::new(kind, TirType::Void.id())
             }
@@ -182,7 +185,10 @@ impl Compiler {
                     panic!("Cannot assign a `{rhs_ty}` to `{lhs_ty}`: {span}")
                 }
                 if !checked_rhs.inner.kind.is_valid_lvalue() {
-                    panic!("Cannot assign to this expression as it is not a valid LVALUE: {}", checked_lhs.span)
+                    panic!(
+                        "Cannot assign to this expression as it is not a valid LVALUE: {}",
+                        checked_lhs.span
+                    )
                 }
                 let ty = lhs_ty;
                 let kind = TirExprKind::Assign {
