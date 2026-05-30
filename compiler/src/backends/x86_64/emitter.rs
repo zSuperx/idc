@@ -27,7 +27,7 @@ impl Emitter {
         while let Some(bb) = bbs.next() {
             buf.push(Label(bb.name));
             for i in bb.instructions.iter() {
-                buf.push(Comment(format!("IR: {i}")));
+                // buf.push(Comment(format!("IR: {i}")));
                 match *i {
                     Instr::Param(ty, dst, num, name) => {
                         let loc = match num {
@@ -37,14 +37,14 @@ impl Emitter {
                             3 => Reg(Rcx),
                             4 => Reg(R8),
                             5 => Reg(R9),
-                            _ => Offset(Rbp, num.saturating_sub(6) as i128 + 8),
+                            _ => Offset(ty, Rbp, num.saturating_sub(6) as i128 + 8),
                         };
                         buf.push(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
                     Instr::Alloc(ty, dst, name) => {
                         let size = align_n(ty.size() as i128, ty.alignment());
-                        let loc = Offset(Rbp, self.v_rsp - 8);
+                        let loc = Offset(ty, Rbp, self.v_rsp - 8);
                         let aligned_size = align_n(size, 16);
                         self.v_rsp -= aligned_size;
                         buf.push(Sub(Reg(Rsp), Imm(aligned_size as i128)));
@@ -60,14 +60,14 @@ impl Emitter {
                     // mov ..., [rs1]
                     Instr::Load(ty, dst, rs1) => {
                         let dst = self.v2h.get(&dst).copied().unwrap_or(Reg(Virt(dst)));
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Offset(Virt(rs1), 0));
+                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Offset(ty, Virt(rs1), 0));
 
                         // I actually don't know if this will always be true
                         assert!(matches!(dst, Reg(_)));
 
                         let rs1 = match rs1 {
-                            Reg(reg) => Offset(reg, 0),
-                            Offset(reg, _) => rs1,
+                            Reg(reg) => Offset(ty, reg, 0),
+                            Offset(..) => rs1,
                             Imm(_) => unreachable!(),
                         };
 
@@ -75,7 +75,7 @@ impl Emitter {
                     }
                     // lea [rs1], rs2
                     Instr::Store(ty, rs1, rs2) => {
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Offset(Virt(rs1), 0));
+                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Offset(ty, Virt(rs1), 0));
                         let rs2 = self.v2h.get(&rs2).copied().unwrap_or(Reg(Virt(rs2)));
 
                         // I actually don't know if this will always be true

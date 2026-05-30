@@ -2,13 +2,13 @@ use std::fmt::Display;
 
 use iformatter::Iformat;
 
-use crate::lir::{BB, VReg};
+use crate::lir::{BB, LirType, VReg};
 
 #[derive(Clone, Copy)]
 pub enum Val {
     Imm(i128),
     Reg(Reg),
-    Offset(Reg, i128),
+    Offset(LirType, Reg, i128),
 }
 
 impl Display for Val {
@@ -16,11 +16,20 @@ impl Display for Val {
         match self {
             Val::Imm(imm) => f.write_fmt(format_args!("{imm}")),
             Val::Reg(reg) => f.write_fmt(format_args!("{reg}")),
-            Val::Offset(reg, imm) => match imm {
-                ..0 => f.write_fmt(format_args!("[{reg} - {}]", imm.abs())),
-                 0  => f.write_fmt(format_args!("[{reg}]")),
-                0.. => f.write_fmt(format_args!("[{reg} + {}]", imm.abs())),
-            },
+            Val::Offset(ty, reg, imm) => {
+                let width_spec = match ty.size() {
+                    1 => "byte",
+                    2 => "word",
+                    4 => "dword",
+                    8 => "qword",
+                    _ => unreachable!(),
+                };
+                match imm {
+                    ..0 => f.write_fmt(format_args!("{width_spec} [{reg} - {}]", imm.abs())),
+                    0 => f.write_fmt(format_args!("{width_spec} [{reg}]")),
+                    0.. => f.write_fmt(format_args!("{width_spec} [{reg} + {}]", imm.abs())),
+                }
+            }
         }
     }
 }

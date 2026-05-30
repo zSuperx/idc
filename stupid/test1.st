@@ -1,7 +1,7 @@
-fn main(p: *u64) -> i32 {
+fn main(p: *i8) -> i8 {
   if *p == 69 {
     return 69;
   } else {
-    return 420;
+    return *p;
   }
 }
