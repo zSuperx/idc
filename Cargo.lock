@@ -12,14 +12,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "compiler"
-version = "0.1.0"
-dependencies = [
- "iformatter",
- "registry",
-]
-
-[[package]]
 name = "iformatter"
 version = "0.1.0"
 dependencies = [
@@ -84,6 +76,14 @@ checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
 [[package]]
 name = "registry"
 version = "0.1.0"
+
+[[package]]
+name = "stu"
+version = "0.1.0"
+dependencies = [
+ "iformatter",
+ "registry",
+]
 
 [[package]]
 name = "syn"

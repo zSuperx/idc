@@ -1,4 +1,4 @@
-use crate::compiler::Compiler;
+use crate::aux::Compiler;
 use crate::{add_str, ast::*};
 use crate::{hir::*, source};
 
@@ -30,8 +30,6 @@ impl Compiler {
             let name = self.expect_ident();
             self.commit(name, span_start)
         };
-
-        self.curr_fn.raw_name = name;
 
         self.expect(Token::LParen);
         let mut args = vec![];

@@ -84,6 +84,12 @@ pub struct Id<K: Hash + Clone + Eq> {
     _pd: PhantomData<K>,
 }
 
+impl<K: Hash + Clone + Eq> Into<usize> for Id<K> {
+    fn into(self) -> usize {
+        self.index
+    }
+}
+
 impl<K: Hash + Clone + Eq> Clone for Id<K> {
     fn clone(&self) -> Self {
         *self

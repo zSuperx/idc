@@ -38,6 +38,7 @@ impl Emitter {
         let mut buf = vec![];
         self.emit_prologue(&mut buf);
         let bbs = f.bbs.clone();
+        let exit_bb = f.next_bb("");
         let mut bb_iter = bbs.iter().peekable();
         while let Some(bb) = bb_iter.next() {
             buf.push(Label(bb.name));
@@ -174,15 +175,17 @@ impl Emitter {
                     Instr::Ret(ty, rs1) => {
                         let rs1 = self.resolve_val(rs1);
                         buf.push(Mov(Reg(Rax), rs1));
-                        self.emit_epilogue(&mut buf);
+                        buf.push(Jmp(exit_bb));
                     }
 
                     Instr::RetVoid => {
-                        self.emit_epilogue(&mut buf);
+                        buf.push(Jmp(exit_bb));
                     }
                 }
             }
         }
+        buf.push(Label(exit_bb));
+        self.emit_epilogue(&mut buf);
         x86_64Function::new(f.raw_name, buf)
     }
 

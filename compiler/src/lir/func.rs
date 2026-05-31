@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::Spanned,
-    compiler::SymbolInfo,
+    aux::SymbolInfo,
     lir::{BB, BasicBlock, Instr, LirVal, VVal},
     tir::{TypeId, VarId},
     utils::Env,
@@ -21,6 +21,7 @@ pub struct LIRFunction {
 
     // BBs we have built so far
     pub bbs: Vec<BasicBlock>,
+    pub bb_count: usize,
     // In-progress stuff for building BBs
     pub buf: Vec<Instr>,
     pub curr_bb_name: Option<BB>,
@@ -33,13 +34,22 @@ impl LIRFunction {
         LirVal::Reg(id)
     }
 
+    pub fn next_bb(&mut self, name: &'static str) -> BB {
+        self.bb_count += 1;
+        BB(self.name.unwrap(), self.bb_count - 1, name)
+    }
+
     pub fn start_new_block(&mut self, name: BB) {
         if let Some(old_name) = self.curr_bb_name {
             // Commit the old block, but first check if it terminated
-            let buf = std::mem::take(&mut self.buf);
-            let terminator = match self.get_terminator() {
+            let tmp = self.get_terminator();
+            let mut buf = std::mem::take(&mut self.buf);
+            let terminator = match tmp {
                 Some(t) => t,
-                None => Instr::Jmp(name), // if it didn't terminate, hook it up to the new one
+                None => {
+                    buf.push(Instr::Jmp(name));
+                    Instr::Jmp(name)
+                }, // if it didn't terminate, hook it up to the new one
             };
             let bb = BasicBlock::new(old_name, buf, terminator);
             self.bbs.push(bb);

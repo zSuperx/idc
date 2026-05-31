@@ -24,6 +24,7 @@ impl std::fmt::Display for x86_64Function {
             }
             f.write_fmt(format_args!("{i}\n"))?;
         }
+        f.write_str("\n")?;
         Ok(())
     }
 }

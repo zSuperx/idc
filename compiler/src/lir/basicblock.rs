@@ -1,11 +1,17 @@
 use crate::{lir::*, tir::VarId};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct BB(pub &'static str, pub usize);
+pub struct BB(pub VarId, pub usize, pub &'static str);
 
 impl std::fmt::Display for BB {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}{}", self.0, self.1))
+        let id: usize = self.0.into();
+        f.write_fmt(format_args!(".F{id}.{}", self.1))?;
+        if !self.2.is_empty() {
+            f.write_str(".")?;
+            f.write_str(self.2)?;
+        }
+        Ok(())
     }
 }
 

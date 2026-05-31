@@ -1,8 +1,8 @@
-use crate::compiler::{SymbolInfo, SymbolKind};
+use crate::aux::{SymbolInfo, SymbolKind};
 use crate::hir::HirType;
 use crate::hir::*;
 use crate::tir::*;
-use crate::{ast::*, compiler::Compiler, hir, tir::TypeId};
+use crate::{ast::*, aux::Compiler, hir, tir::TypeId};
 
 impl Compiler {
     fn next_var(&mut self, argname: &str) -> VarId {
@@ -50,11 +50,14 @@ impl Compiler {
                 ..
             } => {
                 self.curr_fn.env.push_scope();
+                self.curr_fn.raw_name = name;
+                self.curr_fn.name = Some(self.next_var(name.inner));
                 let mut checked_args = vec![];
                 let mut arg_types = vec![];
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
                     let var_id = argname.map(|name| self.next_var(*name));
                     let var_ty = self.check_type(ty);
+
 
                     self.curr_fn.symbol_table.insert(
                         var_id.inner,

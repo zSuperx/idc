@@ -1,6 +1,6 @@
 use crate::{
     ast::*,
-    compiler::{Compiler, SymbolInfo, SymbolKind},
+    aux::{Compiler, SymbolInfo, SymbolKind},
     lir::*,
     tir::*,
 };
@@ -8,12 +8,6 @@ use crate::{
 use Instr::*;
 
 impl Compiler {
-    fn next_bb(&mut self, name: Option<&'static str>) -> BB {
-        let id = self.bb_count;
-        self.bb_count += 1;
-        BB(name.unwrap_or(".L"), id)
-    }
-
     pub fn lower_func(&mut self, obj: Spanned<TirObj>) -> LIRFunction {
         match obj.inner.kind {
             TirObjKind::Fn {
@@ -22,7 +16,7 @@ impl Compiler {
                 args,
                 body,
             } => {
-                let entry_bb = self.next_bb(Some("entry"));
+                let entry_bb = self.curr_fn.next_bb("entry");
                 self.curr_fn.start_new_block(entry_bb);
                 let symbol_table = std::mem::take(&mut self.curr_fn.symbol_table);
                 for (name, info) in symbol_table.iter() {
@@ -57,14 +51,11 @@ impl Compiler {
                     }
                 }
 
-                let body_bb = self.next_bb(Some("body"));
+                let body_bb = self.curr_fn.next_bb("body");
                 self.curr_fn.start_new_block(body_bb);
                 self.lower_stmt(*body);
 
-                println!("{:?}", self.curr_fn.buf);
-                println!("{:?}", self.curr_fn.get_terminator());
-
-                if self.curr_fn.get_terminator().is_none() && !self.curr_fn.buf.is_empty() {
+                if self.curr_fn.get_terminator().is_none() {
                     match returns.inner.lookup() {
                         TirType::Void => self.curr_fn.buf.push(RetVoid),
                         _ => panic!(
@@ -73,7 +64,7 @@ impl Compiler {
                     }
                 }
 
-                let exit_bb = self.next_bb(None);
+                let exit_bb = self.curr_fn.next_bb("");
                 self.curr_fn.start_new_block(exit_bb);
 
                 std::mem::take(&mut self.curr_fn)
@@ -97,10 +88,10 @@ impl Compiler {
             TirStmtKind::Break => todo!(),
             TirStmtKind::If { cond, then_, else_ } => {
                 // PREVIOUS BB
-                let if_bb = self.next_bb(Some("if"));
-                let then_bb = self.next_bb(Some("then"));
-                let else_bb = self.next_bb(Some("else"));
-                let end_bb = self.next_bb(Some("endif"));
+                let if_bb = self.curr_fn.next_bb("if");
+                let then_bb = self.curr_fn.next_bb("then");
+                let else_bb = self.curr_fn.next_bb("else");
+                let end_bb = self.curr_fn.next_bb("endif");
 
                 // IF BB
                 self.curr_fn.start_new_block(if_bb);
@@ -113,20 +104,29 @@ impl Compiler {
                 self.lower_stmt(*then_);
                 let jmp_end = Jmp(end_bb);
                 self.curr_fn.emit(jmp_end);
+                let then_term = self.curr_fn.get_terminator();
 
                 // ELSE BB
                 self.curr_fn.start_new_block(else_bb);
                 self.lower_stmt(*else_);
                 let jmp_end = Jmp(end_bb);
                 self.curr_fn.emit(jmp_end);
+                let else_term = self.curr_fn.get_terminator();
 
                 // END BB (empty)
-                self.curr_fn.start_new_block(end_bb);
+                match (then_term, else_term) {
+                    (Some(t), Some(e)) if t.is_ret() && e.is_ret() => {}
+                    _ => self.curr_fn.start_new_block(end_bb),
+                }
             }
             TirStmtKind::Return(spanned) => {
-                let ty = spanned.inner.meta.into();
-                let rs1 = self.lower_expr(spanned);
-                self.curr_fn.emit(Ret(ty, rs1));
+                if *spanned.inner.meta.lookup() == TirType::Void {
+                    self.curr_fn.emit(RetVoid);
+                } else {
+                    let ty = spanned.inner.meta.into();
+                    let rs1 = self.lower_expr(spanned);
+                    self.curr_fn.emit(Ret(ty, rs1));
+                }
             }
             TirStmtKind::Block(spanneds) => {
                 for s in spanneds {

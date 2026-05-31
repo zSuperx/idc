@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::{
     ast::{BinOp, UnOp},
-    compiler::Compiler,
+    aux::Compiler,
     lir::{BasicBlock, Instr, LIRFunction, LirVal},
 };
 

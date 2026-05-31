@@ -62,3 +62,9 @@ pub enum Instr {
     RetVoid,
 }
 
+impl Instr {
+    pub fn is_ret(&self) -> bool {
+        matches!(self, Instr::Ret(..) | Instr::RetVoid)
+    }
+}
+
