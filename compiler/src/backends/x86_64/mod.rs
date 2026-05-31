@@ -1,3 +1,5 @@
+#![allow(nonstandard_style)]
+
 mod emitter;
 pub use emitter::*;
 

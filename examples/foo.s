@@ -1,26 +1,30 @@
 section .text
 global main
 main:
+.L7.prologue:
 	push rbp
 	mov rbp, rsp
-.F0.0.entry:
+	jmp .L0.entry
+.L0.entry:
 	; %0 -> rdi
-	jmp .F0.1.body
-.F0.1.body:
-	jmp .F0.2.if
-.F0.2.if:
-	cmp rdi, 1
-	mov %6, 1
-	cmovg %1, %6
+	jmp .L1.body
+.L1.body:
+	jmp .L2.if
+.L2.if:
+	cmp rdi, 4
+	mov %8, 1
+	cmove %1, %8
 	cmp %1, 1
-	jz .F0.4.else
-.F0.3.then:
-	mov rax, 69
-	jmp .F0.7.x86exit
-.F0.4.else:
-	mov rax, 68
-	jmp .F0.7.x86exit
-.F0.7.x86exit:
+	jz .L4.else
+.L3.then:
+	mov rax, 420
+	jmp .L8.epilogue
+.L4.else:
+	mov %5, rdi
+	imul %5, 2
+	mov rax, %5
+	jmp .L8.epilogue
+.L8.epilogue:
 	mov rsp, rbp
 	pop rbp
 	ret 

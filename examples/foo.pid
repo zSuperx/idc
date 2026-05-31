@@ -1,11 +1,7 @@
 fn main(argc: i32) -> i32 {
-  if argc > 1 {
-    return 69;
+  if argc == 4 {
+    return 420;
   } else {
-    return 68;
+    return argc * 2;
   }
-}
-
-fn foo(x: i8) -> i8 {
-  return x + 1;
 }

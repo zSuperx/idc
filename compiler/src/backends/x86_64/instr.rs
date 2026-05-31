@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use iformatter::Iformat;
 
-use crate::lir::{BB, LirType, LirVal};
+use crate::lir::{BB, Instr, LirType, LirVal};
 
 #[derive(Clone, Copy)]
 pub enum Val {
@@ -69,8 +69,8 @@ impl std::fmt::Display for Reg {
     }
 }
 
-#[derive(Iformat)]
-pub enum Instr {
+#[derive(Iformat, Clone)]
+pub enum x86Instr {
     /// %1
     Raw(String),
     /// ; %1
@@ -130,4 +130,31 @@ pub enum Instr {
     Jb(BB),
     Jns(BB),
     Jmp(BB),
+}
+
+impl Instr for x86Instr {
+    fn is_terminator(&self) -> bool {
+        match self {
+            x86Instr::Ret
+            | x86Instr::Je(..)
+            | x86Instr::Jne(..)
+            | x86Instr::Jz(..)
+            | x86Instr::Jnz(..)
+            | x86Instr::Jg(..)
+            | x86Instr::Jge(..)
+            | x86Instr::Jl(..)
+            | x86Instr::Jle(..)
+            | x86Instr::Jo(..)
+            | x86Instr::Jc(..)
+            | x86Instr::Js(..)
+            | x86Instr::Jb(..)
+            | x86Instr::Jns(..)
+            | x86Instr::Jmp(..) => true,
+            _ => false,
+        }
+    }
+
+    fn uncond_jump(target: BB) -> Self {
+        Self::Jmp(target)
+    }
 }

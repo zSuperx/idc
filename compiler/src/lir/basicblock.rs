@@ -1,35 +1,30 @@
+use std::fmt::Display;
+
 use crate::{lir::*, tir::VarId};
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub struct BB(pub VarId, pub usize, pub &'static str);
+pub struct BB(pub usize, pub &'static str);
 
 impl std::fmt::Display for BB {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let id: usize = self.0.into();
-        f.write_fmt(format_args!(".F{id}.{}", self.1))?;
-        if !self.2.is_empty() {
+        f.write_fmt(format_args!(".L{}", self.0))?;
+        if !self.1.is_empty() {
             f.write_str(".")?;
-            f.write_str(self.2)?;
+            f.write_str(self.1)?;
         }
         Ok(())
     }
 }
 
-pub enum Terminator {
-    Fallthrough,
-    Instr(Instr),
-    None,
-}
-
 #[derive(Debug, Clone)]
-pub struct BasicBlock {
+pub struct BasicBlock<I> {
     pub name: BB,
-    pub instructions: Vec<Instr>,
-    pub terminator: Instr,
+    pub instructions: Vec<I>,
+    pub terminator: I,
 }
 
-impl BasicBlock {
-    pub fn new(name: BB, instructions: Vec<Instr>, terminator: Instr) -> Self {
+impl<I> BasicBlock<I> {
+    pub fn new(name: BB, instructions: Vec<I>, terminator: I) -> Self {
         Self {
             name,
             instructions,
@@ -38,7 +33,7 @@ impl BasicBlock {
     }
 }
 
-impl std::fmt::Display for BasicBlock {
+impl<I: Display> std::fmt::Display for BasicBlock<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}:\n", self.name))?;
         for i in self.instructions.iter() {

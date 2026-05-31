@@ -7,7 +7,7 @@ use registry::Registry;
 
 use crate::{
     ast::*,
-    lir::{self, BB, BasicBlock, Instr, LIRFunction, LirVal, VVal},
+    lir::{self, BB, BasicBlock, Builder, FnCtx, LirInstr, LirVal, VVal},
     tir::{TirType, TypeId, VarId},
     utils::Env,
 };
@@ -23,7 +23,7 @@ pub struct Compiler {
     pub last_span: Span,
 
     // This context is reset per function
-    pub curr_fn: LIRFunction,
+    pub curr_fn: FnCtx,
 
     pub symbols: Registry<String>, // Uniquely ID'd scoped identifiers
     pub var_count: usize,          // Distinguishes shadowed vars
@@ -55,7 +55,7 @@ impl Compiler {
         s
     }
 
-    pub fn compile_prog(&mut self) -> Vec<LIRFunction> {
+    pub fn compile_prog(&mut self) -> Vec<Builder<LirInstr>> {
         let mut buf = vec![];
         while !self.is_next(Token::Eof) {
             _ = std::mem::take(&mut self.curr_fn);

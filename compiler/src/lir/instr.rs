@@ -29,7 +29,7 @@ impl std::fmt::Display for LirVal {
 }
 
 #[derive(Debug, Clone, Copy, Iformat)]
-pub enum Instr {
+pub enum LirInstr {
     Param(LirType, LirVal, usize, VarId),
     Alloc(LirType, LirVal, VarId),
 
@@ -62,9 +62,27 @@ pub enum Instr {
     RetVoid,
 }
 
-impl Instr {
+impl LirInstr {
     pub fn is_ret(&self) -> bool {
-        matches!(self, Instr::Ret(..) | Instr::RetVoid)
+        matches!(self, LirInstr::Ret(..) | LirInstr::RetVoid)
     }
 }
 
+impl Instr for LirInstr {
+    fn is_terminator(&self) -> bool {
+        match self {
+            Self::Jmp(..) | Self::Br(..) | Self::RetVoid | Self::Ret(..) => true,
+            _ => false,
+        }
+    }
+
+    fn uncond_jump(target: BB) -> Self {
+        Self::Jmp(target)
+    }
+}
+
+pub trait Instr {
+    fn is_terminator(&self) -> bool;
+
+    fn uncond_jump(target: BB) -> Self;
+}

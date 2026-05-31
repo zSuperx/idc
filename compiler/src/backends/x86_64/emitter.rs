@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use crate::ast::BinOp;
-use crate::backends::x86_64::{self, x86_64Function};
-use crate::lir::{BB, Instr, LIRFunction, LirType, LirVal};
+use crate::backends::x86_64::instr::x86Instr;
+use crate::backends::x86_64::{self, x86Function};
+use crate::lir::{BB, BasicBlock, Builder, FnCtx, LirInstr, LirType, LirVal};
 use crate::utils::align_n;
 
-use x86_64::Instr::*;
 use x86_64::Reg::*;
 use x86_64::Val::*;
+use x86_64::x86Instr::*;
 
 #[derive(Default)]
 pub struct Emitter {
@@ -34,18 +35,22 @@ impl Emitter {
         }
     }
 
-    pub fn translate_func(&mut self, mut f: LIRFunction) -> x86_64Function {
-        let mut buf = vec![];
-        self.emit_prologue(&mut buf);
-        let bbs = f.bbs.clone();
-        let exit_bb = f.next_bb("");
-        let mut bb_iter = bbs.iter().peekable();
+    pub fn translate_func(&mut self, mut f: Builder<LirInstr>) -> Builder<x86Instr> {
+        let mut builder = Builder::new(f.name, f.bb_count, f.vreg_count);
+
+        let prologue = builder.next_bb("prologue");
+        builder.start_new_block(prologue);
+        builder.emit(Push(Reg(Rbp)));
+        builder.emit(Mov(Reg(Rbp), Reg(Rsp)));
+
+        let epilogue = builder.next_bb("epilogue");
+
+        let mut bb_iter = f.bbs.iter().peekable();
         while let Some(bb) = bb_iter.next() {
-            buf.push(Label(bb.name));
+            builder.start_new_block(bb.name);
             for i in bb.instructions.iter() {
-                // buf.push(Comment(format!("IR: {i}")));
                 match *i {
-                    Instr::Param(ty, dst, num, name) => {
+                    LirInstr::Param(ty, dst, num, name) => {
                         let loc = match num {
                             0 => Reg(Rdi),
                             1 => Reg(Rsi),
@@ -55,25 +60,25 @@ impl Emitter {
                             5 => Reg(R9),
                             _ => Offset(ty, Rbp, num.saturating_sub(6) as i128 + 8),
                         };
-                        buf.push(Comment(format!("{dst} -> {loc}")));
+                        builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
-                    Instr::Alloc(ty, dst, name) => {
+                    LirInstr::Alloc(ty, dst, name) => {
                         let size = align_n(ty.size() as i128, ty.alignment());
                         let loc = Offset(ty, Rbp, self.v_rsp - 8);
                         let aligned_size = align_n(size, 16);
                         self.v_rsp -= aligned_size;
-                        buf.push(Sub(Reg(Rsp), Imm(aligned_size as i128)));
-                        buf.push(Comment(format!("{dst} -> {loc}")));
+                        builder.emit(Sub(Reg(Rsp), Imm(aligned_size as i128)));
+                        builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
-                    Instr::Copy(ty, dst, rs1) => {
+                    LirInstr::Copy(ty, dst, rs1) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
-                        buf.push(Mov(dst, rs1))
+                        builder.emit(Mov(dst, rs1))
                     }
                     // mov ..., [rs1]
-                    Instr::Load(ty, dst, rs1) => {
+                    LirInstr::Load(ty, dst, rs1) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_ptr(rs1, ty);
 
@@ -86,10 +91,10 @@ impl Emitter {
                             Imm(_) => unreachable!(),
                         };
 
-                        buf.push(Mov(dst, rs1));
+                        builder.emit(Mov(dst, rs1));
                     }
                     // lea [rs1], rs2
-                    Instr::Store(ty, rs1, rs2) => {
+                    LirInstr::Store(ty, rs1, rs2) => {
                         let rs1 = self.resolve_ptr(rs1, ty);
                         let rs2 = self.resolve_val(rs2);
 
@@ -98,109 +103,107 @@ impl Emitter {
 
                         match rs2 {
                             Offset(..) => {
-                                let tmp = self.resolve_val(f.next_reg());
-                                buf.push(Lea(tmp, rs2));
-                                buf.push(Mov(rs1, tmp));
+                                let tmp = self.resolve_val(builder.next_reg());
+                                builder.emit(Lea(tmp, rs2));
+                                builder.emit(Mov(rs1, tmp));
                             }
-                            _ => buf.push(Mov(rs1, rs2)),
+                            _ => builder.emit(Mov(rs1, rs2)),
                         }
                     }
-                    Instr::Br(rs1, bb1, bb2) => {
+                    LirInstr::Br(rs1, bb1, bb2) => {
                         let rs1 = self.resolve_val(rs1);
-                        buf.push(Cmp(rs1, Imm(1)));
+                        builder.emit(Cmp(rs1, Imm(1)));
                         if bb_iter.peek().is_none_or(|next_bb| next_bb.name != bb1) {
-                            buf.push(Jnz(bb1));
+                            builder.emit(Jnz(bb1));
                         }
-                        buf.push(Jz(bb2));
+                        builder.emit(Jz(bb2));
                     }
-                    Instr::Jmp(bb) => buf.push(Jmp(bb)),
-                    Instr::Add(ty, dst, rs1, rs2) => {
+                    LirInstr::Jmp(bb) => builder.emit(Jmp(bb)),
+                    LirInstr::Add(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
-                        buf.push(Mov(dst, rs1));
-                        buf.push(Add(dst, rs2));
+                        builder.emit(Mov(dst, rs1));
+                        builder.emit(Add(dst, rs2));
                     }
-                    Instr::Sub(ty, dst, rs1, rs2) => {
+                    LirInstr::Sub(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
-                        buf.push(Mov(dst, rs1));
-                        buf.push(Sub(dst, rs2));
+                        builder.emit(Mov(dst, rs1));
+                        builder.emit(Sub(dst, rs2));
                     }
-                    Instr::Muls(ty, dst, rs1, rs2) => {
+                    LirInstr::Muls(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
-                        buf.push(Mov(dst, rs1));
-                        buf.push(IMul(dst, rs2));
+                        builder.emit(Mov(dst, rs1));
+                        builder.emit(IMul(dst, rs2));
                     }
-                    Instr::Mulu(ty, dst, rs1, rs2) => {
+                    LirInstr::Mulu(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
-                        buf.push(Mov(dst, rs1));
-                        buf.push(Mul(dst, rs2));
+                        builder.emit(Mov(dst, rs1));
+                        builder.emit(Mul(dst, rs2));
                     }
-                    Instr::Eq(ty, dst, rs1, rs2)
-                    | Instr::Sgt(ty, dst, rs1, rs2)
-                    | Instr::Sge(ty, dst, rs1, rs2)
-                    | Instr::Slt(ty, dst, rs1, rs2)
-                    | Instr::Sle(ty, dst, rs1, rs2)
-                    | Instr::Ugt(ty, dst, rs1, rs2)
-                    | Instr::Uge(ty, dst, rs1, rs2)
-                    | Instr::Ult(ty, dst, rs1, rs2)
-                    | Instr::Ule(ty, dst, rs1, rs2) => {
+                    LirInstr::Eq(ty, dst, rs1, rs2)
+                    | LirInstr::Sgt(ty, dst, rs1, rs2)
+                    | LirInstr::Sge(ty, dst, rs1, rs2)
+                    | LirInstr::Slt(ty, dst, rs1, rs2)
+                    | LirInstr::Sle(ty, dst, rs1, rs2)
+                    | LirInstr::Ugt(ty, dst, rs1, rs2)
+                    | LirInstr::Uge(ty, dst, rs1, rs2)
+                    | LirInstr::Ult(ty, dst, rs1, rs2)
+                    | LirInstr::Ule(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
-                        buf.push(Cmp(rs1, rs2));
-                        let tmp = self.resolve_val(f.next_reg());
-                        buf.push(Mov(tmp, Imm(1)));
+                        builder.emit(Cmp(rs1, rs2));
+                        let tmp = self.resolve_val(builder.next_reg());
+                        builder.emit(Mov(tmp, Imm(1)));
                         let cmov_instr = match i {
-                            Instr::Eq(..) => Cmove(dst, tmp),
-                            Instr::Sgt(..) => Cmovg(dst, tmp),
-                            Instr::Sge(..) => Cmovge(dst, tmp),
-                            Instr::Slt(..) => Cmovl(dst, tmp),
-                            Instr::Sle(..) => Cmovle(dst, tmp),
-                            Instr::Ugt(..) => Cmovg(dst, tmp),
-                            Instr::Uge(..) => Cmovge(dst, tmp),
-                            Instr::Ult(..) => Cmovl(dst, tmp),
-                            Instr::Ule(..) => Cmovle(dst, tmp),
+                            LirInstr::Eq(..) => Cmove(dst, tmp),
+                            LirInstr::Sgt(..) => Cmovg(dst, tmp),
+                            LirInstr::Sge(..) => Cmovge(dst, tmp),
+                            LirInstr::Slt(..) => Cmovl(dst, tmp),
+                            LirInstr::Sle(..) => Cmovle(dst, tmp),
+                            LirInstr::Ugt(..) => Cmovg(dst, tmp),
+                            LirInstr::Uge(..) => Cmovge(dst, tmp),
+                            LirInstr::Ult(..) => Cmovl(dst, tmp),
+                            LirInstr::Ule(..) => Cmovle(dst, tmp),
                             _ => unreachable!(),
                         };
-                        buf.push(cmov_instr);
+                        builder.emit(cmov_instr);
                     }
 
-                    Instr::Ret(ty, rs1) => {
+                    LirInstr::Ret(ty, rs1) => {
                         let rs1 = self.resolve_val(rs1);
-                        buf.push(Mov(Reg(Rax), rs1));
-                        buf.push(Jmp(exit_bb));
+                        builder.emit(Mov(Reg(Rax), rs1));
+                        builder.emit(Jmp(epilogue));
                     }
 
-                    Instr::RetVoid => {
-                        buf.push(Jmp(exit_bb));
+                    LirInstr::RetVoid => {
+                        builder.emit(Jmp(epilogue));
                     }
                 }
             }
         }
-        buf.push(Label(exit_bb));
-        self.emit_epilogue(&mut buf);
-        x86_64Function::new(f.raw_name, buf)
+        builder.start_new_block(epilogue);
+        builder.emit(Mov(Reg(Rsp), Reg(Rbp)));
+        builder.emit(Pop(Reg(Rbp)));
+        builder.emit(Ret);
+
+        let exit_bb = builder.next_bb("");
+        builder.start_new_block(exit_bb);
+
+        builder
     }
 
-    fn emit_prologue(&mut self, buf: &mut Vec<x86_64::Instr>) {
-        buf.push(Push(Reg(Rbp)));
-        buf.push(Mov(Reg(Rbp), Reg(Rsp)));
-    }
-
-    fn emit_epilogue(&mut self, buf: &mut Vec<x86_64::Instr>) {
-        buf.push(Mov(Reg(Rsp), Reg(Rbp)));
-        buf.push(Pop(Reg(Rbp)));
-        buf.push(Ret);
-    }
-
-    pub fn allocate_registers(&mut self, instructions: Vec<x86_64::Instr>) -> Vec<x86_64::Instr> {
+    pub fn allocate_registers(
+        &mut self,
+        instructions: Vec<x86Instr>,
+    ) -> Vec<x86Instr> {
         todo!()
     }
 }

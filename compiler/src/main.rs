@@ -50,7 +50,7 @@ fn main() {
     let mut buf = String::new();
     for func in prog {
         match cfg.target {
-            Target::IR => buf.write_fmt(format_args!("{func}")).unwrap(),
+            Target::IR => buf.write_fmt(format_args!("{}", func)).unwrap(),
             Target::x86 => {
                 let mut emitter = x86_64::Emitter::new();
                 let func = emitter.translate_func(func);

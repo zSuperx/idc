@@ -3,30 +3,30 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     ast::{BinOp, UnOp},
     aux::Compiler,
-    lir::{BasicBlock, Instr, LIRFunction, LirVal},
+    lir::{BasicBlock, Builder, FnCtx, LirInstr, LirVal},
 };
 
-use Instr::*;
+use LirInstr::*;
 
 impl Compiler {
-    pub fn optim_func(&mut self, mut f: LIRFunction) -> LIRFunction {
+    pub fn optim_func(&mut self, mut builder: Builder<LirInstr>) -> Builder<LirInstr> {
         let mut const_map = HashMap::new();
         let mut is_read = HashSet::new();
-        for mut bb in f.bbs.iter_mut() {
+        for mut bb in builder.bbs.iter_mut() {
             self.const_fold_bb(&mut bb, &mut const_map);
         }
 
-        for mut bb in f.bbs.iter_mut() {
+        for mut bb in builder.bbs.iter_mut() {
             self.track_live_code(&mut bb, &mut is_read);
         }
 
-        for mut bb in f.bbs.iter_mut() {
+        for mut bb in builder.bbs.iter_mut() {
             self.dead_code_elim(&mut bb, &mut is_read);
         }
-        f
+        builder
     }
 
-    fn const_fold_bb(&mut self, bb: &mut BasicBlock, map: &mut HashMap<LirVal, i128>) {
+    fn const_fold_bb(&mut self, bb: &mut BasicBlock<LirInstr>, map: &mut HashMap<LirVal, i128>) {
         for i in 0..bb.instructions.len() {
             match bb.instructions[i] {
                 Copy(ty, dst, rs1) => {
@@ -82,7 +82,7 @@ impl Compiler {
     }
 
     /// This pass should simply mark which registers are read from
-    fn track_live_code(&mut self, bb: &BasicBlock, is_read: &mut HashSet<LirVal>) {
+    fn track_live_code(&mut self, bb: &BasicBlock<LirInstr>, is_read: &mut HashSet<LirVal>) {
         for instr in bb.instructions.iter() {
             match *instr {
                 Ret(_, rs1) | Br(rs1, ..) | Copy(_, _, rs1) | Load(_, _, rs1) => {
@@ -112,7 +112,7 @@ impl Compiler {
 
     // This pass should look at all instructions who PRODUCE a value. If that value is read, it is
     // considered a useful instructions
-    fn dead_code_elim(&mut self, bb: &mut BasicBlock, is_read: &HashSet<LirVal>) {
+    fn dead_code_elim(&mut self, bb: &mut BasicBlock<LirInstr>, is_read: &HashSet<LirVal>) {
         let mut survivors = vec![];
         for instr in bb.instructions.iter() {
             match *instr {
