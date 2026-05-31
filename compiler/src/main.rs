@@ -7,12 +7,12 @@ use std::{
     sync::{LazyLock, OnceLock},
 };
 
-use crate::{backends::x86_64, aux::Compiler};
+use crate::{aux::Compiler, backends::x86_64};
 
 mod ast;
+mod aux;
 mod backends;
 mod checker;
-mod aux;
 mod hir;
 mod lir;
 mod lower;
@@ -147,7 +147,10 @@ fn parse_args() -> Config {
     let default_output = {
         let ext = input.rfind(".");
         let base = input.get(..ext.unwrap_or(input.len())).unwrap();
-        format!("{base}.s")
+        match target {
+            Target::IR => format!("{base}.s"),
+            Target::x86 => format!("{base}.ir"),
+        }
     };
     let output = output.unwrap_or(default_output);
     Config {
