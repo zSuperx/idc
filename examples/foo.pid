@@ -1,7 +1,3 @@
-fn main(argc: i32) -> i32 {
-  if argc == 4 {
-    return 420;
-  } else {
-    return argc * 2;
-  }
+fn main(argc: i32, argv: **u8) {
+  return;
 }

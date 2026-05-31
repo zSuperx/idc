@@ -5,18 +5,18 @@ use iformatter::Iformat;
 use crate::lir::{BB, Instr, LirType, LirVal};
 
 #[derive(Clone, Copy)]
-pub enum Val {
+pub enum x86Val {
     Imm(i128),
-    Reg(Reg),
-    Offset(LirType, Reg, i128),
+    Reg(x86Reg),
+    Offset(LirType, x86Reg, i128),
 }
 
-impl Display for Val {
+impl Display for x86Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Val::Imm(imm) => f.write_fmt(format_args!("{imm}")),
-            Val::Reg(reg) => f.write_fmt(format_args!("{reg}")),
-            Val::Offset(ty, reg, imm) => {
+            x86Val::Imm(imm) => f.write_fmt(format_args!("{imm}")),
+            x86Val::Reg(reg) => f.write_fmt(format_args!("{reg}")),
+            x86Val::Offset(ty, reg, imm) => {
                 let width_spec = match ty.size() {
                     1 => "byte",
                     2 => "word",
@@ -36,7 +36,7 @@ impl Display for Val {
 
 #[allow(unused)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reg {
+pub enum x86Reg {
     Virt(usize),
     Rdi, // arg 1
     Rsi, // arg 2
@@ -48,28 +48,29 @@ pub enum Reg {
     // Temporary registers that functions may change
     Rax, // Return value
     R10,
-    R11, // (i use this for temp shit like cmovcc)
+    R11,
 
     // Callee-saved registers that will stay unchanged
     Rsp, // Stack pointer
     Rbp, // Frame pointer
-    Rbx, // Base pointer (i dont treat it like one)
-    R12, // (i use this to store the heap pointer)
-    R13, // (i use this to store the end of the heap)
+    Rbx, // Base pointer
+    R12,
+    R13,
     R14,
     R15,
 }
 
-impl std::fmt::Display for Reg {
+impl std::fmt::Display for x86Reg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Reg::Virt(reg_id) => f.write_fmt(format_args!("%{reg_id}")),
+            x86Reg::Virt(reg_id) => f.write_fmt(format_args!("%{reg_id}")),
             _ => f.write_str(&format!("{self:?}").to_ascii_lowercase()),
         }
     }
 }
 
 #[derive(Iformat, Clone)]
+#[valueType(x86Val)]
 pub enum x86Instr {
     /// %1
     Raw(String),
@@ -77,41 +78,41 @@ pub enum x86Instr {
     Comment(String),
 
     // Moves
-    Lea(Val, Val),
-    Mov(Val, Val),
-    Push(Val),
-    Pop(Val),
+    Lea(x86Val, x86Val),
+    Mov(x86Val, x86Val),
+    Push(x86Val),
+    Pop(x86Val),
 
     // Arithmetic
-    IMul(Val, Val),
-    Mul(Val, Val),
-    Sub(Val, Val),
-    Add(Val, Val),
+    IMul(x86Val, x86Val),
+    Mul(x86Val, x86Val),
+    Sub(x86Val, x86Val),
+    Add(x86Val, x86Val),
 
     // Function calls
     Call(String),
     /// call %1
-    ICall(Val),
+    ICall(x86Val),
     Ret,
 
     // Bitwise operations
-    And(Val, Val),
-    Or(Val, Val),
-    Test(Val, Val),
-    Xor(Val, Val),
-    Sar(Val, Val),
-    Sal(Val, Val),
+    And(x86Val, x86Val),
+    Or(x86Val, x86Val),
+    Test(x86Val, x86Val),
+    Xor(x86Val, x86Val),
+    Sar(x86Val, x86Val),
+    Sal(x86Val, x86Val),
 
     // Conditional moves
-    Cmove(Val, Val),
-    Cmovne(Val, Val),
-    Cmovz(Val, Val),
-    Cmovnz(Val, Val),
-    Cmovg(Val, Val),
-    Cmovge(Val, Val),
-    Cmovl(Val, Val),
-    Cmovle(Val, Val),
-    Cmp(Val, Val),
+    Cmove(x86Val, x86Val),
+    Cmovne(x86Val, x86Val),
+    Cmovz(x86Val, x86Val),
+    Cmovnz(x86Val, x86Val),
+    Cmovg(x86Val, x86Val),
+    Cmovge(x86Val, x86Val),
+    Cmovl(x86Val, x86Val),
+    Cmovle(x86Val, x86Val),
+    Cmp(x86Val, x86Val),
 
     // Jump/Branch instructions
     /// %1:

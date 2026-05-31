@@ -23,7 +23,7 @@ pub struct Compiler {
     pub last_span: Span,
 
     // This context is reset per function
-    pub curr_fn: FnCtx,
+    pub func: FnCtx,
 
     pub symbols: Registry<String>, // Uniquely ID'd scoped identifiers
     pub var_count: usize,          // Distinguishes shadowed vars
@@ -58,7 +58,7 @@ impl Compiler {
     pub fn compile_prog(&mut self) -> Vec<Builder<LirInstr>> {
         let mut buf = vec![];
         while !self.is_next(Token::Eof) {
-            _ = std::mem::take(&mut self.curr_fn);
+            _ = std::mem::take(&mut self.func);
             // TODO: add all functions to self.curr_fn
             // FnCtx {
             //     env: todo!(), // Populate env

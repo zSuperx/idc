@@ -16,10 +16,10 @@ impl Compiler {
                 args,
                 body,
             } => {
-                let mut builder = Builder::new(self.curr_fn.raw_name.inner, 0, 0);
+                let mut builder = Builder::new(self.func.raw_name.inner, 0, 0);
                 let entry_bb = builder.next_bb("entry");
                 builder.start_new_block(entry_bb);
-                let symbol_table = std::mem::take(&mut self.curr_fn.symbol_table);
+                let symbol_table = std::mem::take(&mut self.func.symbol_table);
                 for (name, info) in symbol_table.iter() {
                     let SymbolInfo {
                         name,
@@ -33,7 +33,7 @@ impl Compiler {
                         SymbolKind::Local => {
                             let dst = builder.next_reg();
                             builder.emit(Alloc(ty, dst, name));
-                            self.curr_fn.var2val.insert(name, VVal::Ptr(dst));
+                            self.func.var2val.insert(name, VVal::Ptr(dst));
                         }
                         SymbolKind::Param(num) => {
                             let dst = builder.next_reg();
@@ -42,9 +42,9 @@ impl Compiler {
                                 let new_dst = builder.next_reg();
                                 builder.emit(Alloc(ty, new_dst, name));
                                 builder.emit(Store(ty, new_dst, dst));
-                                self.curr_fn.var2val.insert(name, VVal::Ptr(new_dst));
+                                self.func.var2val.insert(name, VVal::Ptr(new_dst));
                             } else {
-                                self.curr_fn.var2val.insert(name, VVal::Reg(dst));
+                                self.func.var2val.insert(name, VVal::Reg(dst));
                             }
                         }
                         SymbolKind::Global => todo!(),
@@ -77,7 +77,7 @@ impl Compiler {
     fn lower_stmt(&mut self, builder: &mut Builder<LirInstr>, stmt: Spanned<TirStmt>) {
         match stmt.inner.kind {
             TirStmtKind::Let { lhs, ty, rhs } => {
-                let VVal::Ptr(rs1) = self.curr_fn.var2val.get(&lhs.inner).copied().unwrap() else {
+                let VVal::Ptr(rs1) = self.func.var2val.get(&lhs.inner).copied().unwrap() else {
                     panic!("Local variable must be an alloca'd pointer");
                 };
                 let ty = rhs.inner.meta.into();
@@ -151,7 +151,7 @@ impl Compiler {
             }
             TirExprKind::Ident(varname) => {
                 let ty = expr.inner.meta.into();
-                let Some(val) = self.curr_fn.var2val.get(&varname).copied() else {
+                let Some(val) = self.func.var2val.get(&varname).copied() else {
                     panic!("Undefined variable: {varname}");
                 };
                 match val {
@@ -200,7 +200,7 @@ impl Compiler {
             }
             TirExprKind::Assign { lhs, rhs } => match lhs.inner.kind {
                 ExprKind::Ident(varname) => {
-                    let Some(val) = self.curr_fn.var2val.get(&varname).copied() else {
+                    let Some(val) = self.func.var2val.get(&varname).copied() else {
                         panic!("Lvar not found: {varname}");
                     };
                     let ty = rhs.inner.meta.into();
@@ -237,7 +237,7 @@ impl Compiler {
                 let ExprKind::Ident(varname) = rhs.inner.kind else {
                     unreachable!()
                 };
-                let Some(val) = self.curr_fn.var2val.get(&varname).copied() else {
+                let Some(val) = self.func.var2val.get(&varname).copied() else {
                     panic!("Lvar not found: {varname}");
                 };
                 let VVal::Ptr(rs1) = val else {

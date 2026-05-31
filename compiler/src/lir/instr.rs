@@ -24,11 +24,11 @@ impl std::fmt::Display for LirVal {
             LirVal::Reg(r) => f.write_fmt(format_args!("%{r}")),
             LirVal::Imm(i) => f.write_fmt(format_args!("{i}")),
         }
-        
     }
 }
 
 #[derive(Debug, Clone, Copy, Iformat)]
+#[valueType(LirVal)]
 pub enum LirInstr {
     Param(LirType, LirVal, usize, VarId),
     Alloc(LirType, LirVal, VarId),
@@ -58,7 +58,7 @@ pub enum LirInstr {
     Br(LirVal, BB, BB),
     Jmp(BB),
     Ret(LirType, LirVal),
-    /// ret
+    /// fmt: ret
     RetVoid,
 }
 

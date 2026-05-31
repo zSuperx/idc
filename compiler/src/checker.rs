@@ -49,9 +49,9 @@ impl Compiler {
                 body,
                 ..
             } => {
-                self.curr_fn.env.push_scope();
-                self.curr_fn.raw_name = name;
-                self.curr_fn.name = Some(self.next_var(name.inner));
+                self.func.env.push_scope();
+                self.func.raw_name = name;
+                self.func.name = Some(self.next_var(name.inner));
                 let mut checked_args = vec![];
                 let mut arg_types = vec![];
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
@@ -59,7 +59,7 @@ impl Compiler {
                     let var_ty = self.check_type(ty);
 
 
-                    self.curr_fn.symbol_table.insert(
+                    self.func.symbol_table.insert(
                         var_id.inner,
                         SymbolInfo {
                             name: var_id.inner,
@@ -71,7 +71,7 @@ impl Compiler {
 
                     checked_args.push((var_id, var_ty));
                     if self
-                        .curr_fn
+                        .func
                         .env
                         .insert(argname.inner, (var_id.inner, var_ty.inner))
                         .is_some()
@@ -81,10 +81,10 @@ impl Compiler {
                     arg_types.push(var_ty.inner);
                 }
                 let returns = self.check_type(returns);
-                self.curr_fn.return_type = Some(returns);
+                self.func.return_type = Some(returns);
 
                 let body = Box::new(self.check_stmt(*body));
-                self.curr_fn.env.pop_scope();
+                self.func.env.pop_scope();
                 let ty = TirType::Function {
                     args: arg_types,
                     returns: returns.inner,
@@ -122,8 +122,8 @@ impl Compiler {
                 let var_ty = rhs.inner.meta;
                 // Insert it into this function's context:
                 // add to env & mark it as a local variable
-                self.curr_fn.env.insert(lhs.inner, (var_id.inner, var_ty));
-                self.curr_fn.symbol_table.insert(
+                self.func.env.insert(lhs.inner, (var_id.inner, var_ty));
+                self.func.symbol_table.insert(
                     var_id.inner,
                     SymbolInfo {
                         name: var_id.inner,
@@ -158,19 +158,19 @@ impl Compiler {
                 TirStmtKind::If { cond, then_, else_ }
             }
             HirStmtKind::Return(val) => {
-                let fn_ret_type = self.curr_fn.return_type.unwrap();
+                let fn_ret_type = self.func.return_type.unwrap();
                 let checked_val = self.check_expr(val, Some(fn_ret_type.inner));
                 if checked_val.inner.meta != fn_ret_type.inner {
                     panic!(
                         "Mismatched return type. Function {} expects {fn_ret_type}but got {}: {}",
-                        self.curr_fn.raw_name.inner, checked_val.inner.meta, checked_val.span
+                        self.func.raw_name.inner, checked_val.inner.meta, checked_val.span
                     )
                 }
                 TirStmtKind::Return(checked_val)
             }
             HirStmtKind::Block(s) => {
-                self.curr_fn.env.push_scope();
-                self.curr_fn.env.pop_scope();
+                self.func.env.push_scope();
+                self.func.env.pop_scope();
                 TirStmtKind::Block(s.into_iter().map(|st| self.check_stmt(st)).collect())
             }
             HirStmtKind::Expr(e) => {
@@ -232,7 +232,7 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExprKind::Ident(i) => {
-                let Some((var, ty)) = self.curr_fn.env.get(&i) else {
+                let Some((var, ty)) = self.func.env.get(&i) else {
                     panic!("Variable `{i}` used but not defined: {span}");
                 };
                 let kind = TirExprKind::Ident(var);
@@ -304,7 +304,7 @@ impl Compiler {
                         let ty = self.known_types.add(TirType::Pointer(rhs_ty));
 
                         // Mark this symbol as address-taken
-                        let Some(info) = self.curr_fn.symbol_table.get_mut(&varname) else {
+                        let Some(info) = self.func.symbol_table.get_mut(&varname) else {
                             panic!("Undefined variable {varname}");
                         };
                         info.address_taken = true;

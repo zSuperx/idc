@@ -6,13 +6,13 @@ use crate::backends::x86_64::{self, x86Function};
 use crate::lir::{BB, BasicBlock, Builder, FnCtx, LirInstr, LirType, LirVal};
 use crate::utils::align_n;
 
-use x86_64::Reg::*;
-use x86_64::Val::*;
+use x86_64::x86Reg::*;
+use x86_64::x86Val::*;
 use x86_64::x86Instr::*;
 
 #[derive(Default)]
 pub struct Emitter {
-    v2h: HashMap<LirVal, x86_64::Val>,
+    v2h: HashMap<LirVal, x86_64::x86Val>,
     v_rsp: i128,
 }
 
@@ -21,14 +21,14 @@ impl Emitter {
         Self::default()
     }
 
-    fn resolve_ptr(&self, v: LirVal, ty: LirType) -> x86_64::Val {
+    fn resolve_ptr(&self, v: LirVal, ty: LirType) -> x86_64::x86Val {
         match v {
             LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Offset(ty, Virt(id), 0)),
             LirVal::Imm(_) => panic!("Resolve pointer called on immediate value"),
         }
     }
 
-    fn resolve_val(&self, v: LirVal) -> x86_64::Val {
+    fn resolve_val(&self, v: LirVal) -> x86_64::x86Val {
         match v {
             LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Reg(Virt(id))),
             LirVal::Imm(i) => Imm(i),
