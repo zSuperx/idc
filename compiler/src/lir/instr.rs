@@ -7,51 +7,57 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct VReg(pub usize);
+pub enum LirVal {
+    Reg(usize),
+    Imm(i128),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VVal {
-    Ptr(VReg),
-    Reg(VReg),
+    Ptr(LirVal),
+    Reg(LirVal),
 }
 
-impl std::fmt::Display for VReg {
+impl std::fmt::Display for LirVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("%{}", self.0))
+        match self {
+            LirVal::Reg(r) => f.write_fmt(format_args!("%{r}")),
+            LirVal::Imm(i) => f.write_fmt(format_args!("{i}")),
+        }
+        
     }
 }
 
 #[derive(Debug, Clone, Copy, Iformat)]
 pub enum Instr {
-    Param(LirType, VReg, usize, VarId),
-    Alloc(LirType, VReg, VarId),
+    Param(LirType, LirVal, usize, VarId),
+    Alloc(LirType, LirVal, VarId),
 
-    Const(LirType, VReg, i128),
-    Copy(LirType, VReg, VReg),
+    Copy(LirType, LirVal, LirVal),
 
-    Add(LirType, VReg, VReg, VReg),
-    Sub(LirType, VReg, VReg, VReg),
-    Muls(LirType, VReg, VReg, VReg),
-    Mulu(LirType, VReg, VReg, VReg),
+    Add(LirType, LirVal, LirVal, LirVal),
+    Sub(LirType, LirVal, LirVal, LirVal),
+    Muls(LirType, LirVal, LirVal, LirVal),
+    Mulu(LirType, LirVal, LirVal, LirVal),
 
-    Eq(LirType, VReg, VReg, VReg),
+    Eq(LirType, LirVal, LirVal, LirVal),
 
-    Sgt(LirType, VReg, VReg, VReg),
-    Sge(LirType, VReg, VReg, VReg),
-    Slt(LirType, VReg, VReg, VReg),
-    Sle(LirType, VReg, VReg, VReg),
+    Sgt(LirType, LirVal, LirVal, LirVal),
+    Sge(LirType, LirVal, LirVal, LirVal),
+    Slt(LirType, LirVal, LirVal, LirVal),
+    Sle(LirType, LirVal, LirVal, LirVal),
 
-    Ugt(LirType, VReg, VReg, VReg),
-    Uge(LirType, VReg, VReg, VReg),
-    Ult(LirType, VReg, VReg, VReg),
-    Ule(LirType, VReg, VReg, VReg),
+    Ugt(LirType, LirVal, LirVal, LirVal),
+    Uge(LirType, LirVal, LirVal, LirVal),
+    Ult(LirType, LirVal, LirVal, LirVal),
+    Ule(LirType, LirVal, LirVal, LirVal),
 
-    Load(LirType, VReg, VReg),
-    Store(LirType, VReg, VReg),
+    Load(LirType, LirVal, LirVal),
+    Store(LirType, LirVal, LirVal),
 
-    Br(VReg, BB, BB),
+    Br(LirVal, BB, BB),
     Jmp(BB),
-    Ret(LirType, VReg),
+    Ret(LirType, LirVal),
     /// ret
     RetVoid,
 }

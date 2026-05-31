@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     ast::{BinOp, UnOp},
     compiler::Compiler,
-    lir::{BasicBlock, Instr, LIRFunction, VReg},
+    lir::{BasicBlock, Instr, LIRFunction, LirVal},
 };
 
 use Instr::*;
@@ -26,17 +26,13 @@ impl Compiler {
         f
     }
 
-    fn const_fold_bb(&mut self, bb: &mut BasicBlock, map: &mut HashMap<VReg, i128>) {
+    fn const_fold_bb(&mut self, bb: &mut BasicBlock, map: &mut HashMap<LirVal, i128>) {
         for i in 0..bb.instructions.len() {
             match bb.instructions[i] {
-                Const(ty, dst, imm) => {
-                    map.insert(dst, imm);
-                }
                 Copy(ty, dst, rs1) => {
                     let v1 = map.get(&rs1).copied();
                     if let Some(imm) = v1 {
                         map.insert(dst, imm);
-                        bb.instructions[i] = Const(ty, dst, imm);
                     }
                 }
                 op @ (Add(ty, dst, rs1, rs2)
@@ -76,7 +72,6 @@ impl Compiler {
                                 _ => unreachable!(),
                             };
                             map.insert(dst, imm);
-                            bb.instructions[i] = Const(ty, dst, imm);
                         }
                         _ => {}
                     }
@@ -87,7 +82,7 @@ impl Compiler {
     }
 
     /// This pass should simply mark which registers are read from
-    fn track_live_code(&mut self, bb: &BasicBlock, is_read: &mut HashSet<VReg>) {
+    fn track_live_code(&mut self, bb: &BasicBlock, is_read: &mut HashSet<LirVal>) {
         for instr in bb.instructions.iter() {
             match *instr {
                 Ret(_, rs1) | Br(rs1, ..) | Copy(_, _, rs1) | Load(_, _, rs1) => {
@@ -117,12 +112,11 @@ impl Compiler {
 
     // This pass should look at all instructions who PRODUCE a value. If that value is read, it is
     // considered a useful instructions
-    fn dead_code_elim(&mut self, bb: &mut BasicBlock, is_read: &HashSet<VReg>) {
+    fn dead_code_elim(&mut self, bb: &mut BasicBlock, is_read: &HashSet<LirVal>) {
         let mut survivors = vec![];
         for instr in bb.instructions.iter() {
             match *instr {
-                Const(_, dst, ..)
-                | Copy(_, dst, ..)
+                Copy(_, dst, ..)
                 | Add(_, dst, ..)
                 | Sub(_, dst, ..)
                 | Muls(_, dst, ..)

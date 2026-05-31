@@ -160,7 +160,7 @@ impl Compiler {
                 if checked_val.inner.meta != fn_ret_type.inner {
                     panic!(
                         "Mismatched return type. Function {} expects {fn_ret_type}but got {}: {}",
-                        self.curr_fn.name.inner, checked_val.inner.meta, checked_val.span
+                        self.curr_fn.raw_name.inner, checked_val.inner.meta, checked_val.span
                     )
                 }
                 TirStmtKind::Return(checked_val)

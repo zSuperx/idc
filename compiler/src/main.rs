@@ -50,12 +50,12 @@ fn main() {
     let prog = comp.compile_prog();
 
     for func in prog {
-        println!("\n=== IR for {} ===\n", func.name);
+        println!("\n=== IR ===\n");
         println!("{func}");
 
-        println!("\n=== x86_64 IR for {} ===\n", func.name);
+        println!("\n=== x86_64 IR ===\n");
         let mut emitter = x86_64::Emitter::new();
         let func_x86_64 = emitter.translate_func(func);
-        println!("{func_x86_64}");
+        // println!("{func_x86_64}");
     }
 }

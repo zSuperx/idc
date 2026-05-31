@@ -7,26 +7,10 @@ use registry::Registry;
 
 use crate::{
     ast::*,
-    lir::{self, BB, BasicBlock, Instr, LIRFunction, VReg, VVal},
+    lir::{self, BB, BasicBlock, Instr, LIRFunction, LirVal, VVal},
     tir::{TirType, TypeId, VarId},
     utils::Env,
 };
-
-#[derive(Debug, Default)]
-pub struct FnCtx {
-    pub name: Spanned<&'static str>,
-    pub env: Env<&'static str, (VarId, TypeId)>, // Tracks scopes and string -> var, type mappings
-    pub return_type: Option<Spanned<TypeId>>,    // Return type of current function
-    pub symbol_table: HashMap<VarId, SymbolInfo>,
-    pub var2val: HashMap<VarId, VVal>,
-    pub reg_count: usize,
-
-    // BBs we have built so far
-    pub bbs: Vec<BasicBlock>,
-    // In-progress stuff for building BBs
-    pub buf: Vec<Instr>,
-    pub curr_bb_name: Option<BB>,
-}
 
 #[derive(Default)]
 pub struct Compiler {
@@ -39,7 +23,7 @@ pub struct Compiler {
     pub last_span: Span,
 
     // This context is reset per function
-    pub curr_fn: FnCtx,
+    pub curr_fn: LIRFunction,
 
     pub symbols: Registry<String>, // Uniquely ID'd scoped identifiers
     pub var_count: usize,          // Distinguishes shadowed vars
@@ -83,7 +67,7 @@ impl Compiler {
             // }
             let f = self.parse_obj();
             let f = self.check_obj(f);
-            let f = self.lower_func(f.inner);
+            let f = self.lower_func(f);
             let f = self.optim_func(f);
             buf.push(f);
         }

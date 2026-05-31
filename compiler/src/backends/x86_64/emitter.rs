@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::ast::BinOp;
 use crate::backends::x86_64::{self, x86_64Function};
-use crate::lir::{BB, Instr, LIRFunction, VReg};
+use crate::lir::{BB, Instr, LIRFunction, LirType, LirVal};
 use crate::utils::align_n;
 
 use x86_64::Instr::*;
@@ -11,7 +11,7 @@ use x86_64::Val::*;
 
 #[derive(Default)]
 pub struct Emitter {
-    v2h: HashMap<VReg, x86_64::Val>,
+    v2h: HashMap<LirVal, x86_64::Val>,
     v_rsp: i128,
 }
 
@@ -20,11 +20,26 @@ impl Emitter {
         Self::default()
     }
 
+    fn resolve_ptr(&self, v: LirVal, ty: LirType) -> x86_64::Val {
+        match v {
+            LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Offset(ty, Virt(id), 0)),
+            LirVal::Imm(_) => panic!("Resolve pointer called on immediate value"),
+        }
+    }
+
+    fn resolve_val(&self, v: LirVal) -> x86_64::Val {
+        match v {
+            LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Reg(Virt(id))),
+            LirVal::Imm(i) => Imm(i),
+        }
+    }
+
     pub fn translate_func(&mut self, mut f: LIRFunction) -> x86_64Function {
         let mut buf = vec![];
         self.emit_prologue(&mut buf);
-        let mut bbs = f.bbs.iter().peekable();
-        while let Some(bb) = bbs.next() {
+        let bbs = f.bbs.clone();
+        let mut bb_iter = bbs.iter().peekable();
+        while let Some(bb) = bb_iter.next() {
             buf.push(Label(bb.name));
             for i in bb.instructions.iter() {
                 // buf.push(Comment(format!("IR: {i}")));
@@ -51,16 +66,15 @@ impl Emitter {
                         buf.push(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
-                    Instr::Const(ty, dst, imm) => buf.push(Mov(Reg(Virt(dst)), Imm(imm))),
                     Instr::Copy(ty, dst, rs1) => {
-                        let dst = self.v2h.get(&dst).copied().unwrap_or(Reg(Virt(dst)));
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Reg(Virt(rs1)));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_val(rs1);
                         buf.push(Mov(dst, rs1))
                     }
                     // mov ..., [rs1]
                     Instr::Load(ty, dst, rs1) => {
-                        let dst = self.v2h.get(&dst).copied().unwrap_or(Reg(Virt(dst)));
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Offset(ty, Virt(rs1), 0));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_ptr(rs1, ty);
 
                         // I actually don't know if this will always be true
                         assert!(matches!(dst, Reg(_)));
@@ -75,46 +89,57 @@ impl Emitter {
                     }
                     // lea [rs1], rs2
                     Instr::Store(ty, rs1, rs2) => {
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Offset(ty, Virt(rs1), 0));
-                        let rs2 = self.v2h.get(&rs2).copied().unwrap_or(Reg(Virt(rs2)));
+                        let rs1 = self.resolve_ptr(rs1, ty);
+                        let rs2 = self.resolve_val(rs2);
 
                         // I actually don't know if this will always be true
                         assert!(matches!(rs1, Offset(..)));
 
                         match rs2 {
                             Offset(..) => {
-                                f.vreg_count += 1;
-                                let tmp = Virt(VReg(f.vreg_count));
-                                buf.push(Lea(Reg(tmp), rs2));
-                                buf.push(Mov(rs1, Reg(tmp)));
+                                let tmp = self.resolve_val(f.next_reg());
+                                buf.push(Lea(tmp, rs2));
+                                buf.push(Mov(rs1, tmp));
                             }
                             _ => buf.push(Mov(rs1, rs2)),
                         }
                     }
                     Instr::Br(rs1, bb1, bb2) => {
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Reg(Virt(rs1)));
+                        let rs1 = self.resolve_val(rs1);
                         buf.push(Cmp(rs1, Imm(1)));
-                        if bbs.peek().is_none_or(|next_bb| next_bb.name != bb1) {
+                        if bb_iter.peek().is_none_or(|next_bb| next_bb.name != bb1) {
                             buf.push(Jnz(bb1));
                         }
                         buf.push(Jz(bb2));
                     }
                     Instr::Jmp(bb) => buf.push(Jmp(bb)),
                     Instr::Add(ty, dst, rs1, rs2) => {
-                        buf.push(Mov(Reg(Virt(dst)), Reg(Virt(rs1))));
-                        buf.push(Add(Reg(Virt(dst)), Reg(Virt(rs2))));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_val(rs1);
+                        let rs2 = self.resolve_val(rs2);
+                        buf.push(Mov(dst, rs1));
+                        buf.push(Add(dst, rs2));
                     }
                     Instr::Sub(ty, dst, rs1, rs2) => {
-                        buf.push(Mov(Reg(Virt(dst)), Reg(Virt(rs1))));
-                        buf.push(Sub(Reg(Virt(dst)), Reg(Virt(rs2))));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_val(rs1);
+                        let rs2 = self.resolve_val(rs2);
+                        buf.push(Mov(dst, rs1));
+                        buf.push(Sub(dst, rs2));
                     }
                     Instr::Muls(ty, dst, rs1, rs2) => {
-                        buf.push(Mov(Reg(Virt(dst)), Reg(Virt(rs1))));
-                        buf.push(IMul(Reg(Virt(dst)), Reg(Virt(rs2))));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_val(rs1);
+                        let rs2 = self.resolve_val(rs2);
+                        buf.push(Mov(dst, rs1));
+                        buf.push(IMul(dst, rs2));
                     }
                     Instr::Mulu(ty, dst, rs1, rs2) => {
-                        buf.push(Mov(Reg(Virt(dst)), Reg(Virt(rs1))));
-                        buf.push(Mul(Reg(Virt(dst)), Reg(Virt(rs2))));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_val(rs1);
+                        let rs2 = self.resolve_val(rs2);
+                        buf.push(Mov(dst, rs1));
+                        buf.push(Mul(dst, rs2));
                     }
                     Instr::Eq(ty, dst, rs1, rs2)
                     | Instr::Sgt(ty, dst, rs1, rs2)
@@ -125,27 +150,29 @@ impl Emitter {
                     | Instr::Uge(ty, dst, rs1, rs2)
                     | Instr::Ult(ty, dst, rs1, rs2)
                     | Instr::Ule(ty, dst, rs1, rs2) => {
-                        buf.push(Cmp(Reg(Virt(rs1)), Reg(Virt(rs2))));
-                        f.vreg_count += 1;
-                        let tmp = Reg(Virt(VReg(f.vreg_count)));
+                        let dst = self.resolve_val(dst);
+                        let rs1 = self.resolve_val(rs1);
+                        let rs2 = self.resolve_val(rs2);
+                        buf.push(Cmp(rs1, rs2));
+                        let tmp = self.resolve_val(f.next_reg());
                         buf.push(Mov(tmp, Imm(1)));
                         let cmov_instr = match i {
-                            Instr::Eq(..) => Cmove(Reg(Virt(dst)), tmp),
-                            Instr::Sgt(..) => Cmovg(Reg(Virt(dst)), tmp),
-                            Instr::Sge(..) => Cmovge(Reg(Virt(dst)), tmp),
-                            Instr::Slt(..) => Cmovl(Reg(Virt(dst)), tmp),
-                            Instr::Sle(..) => Cmovle(Reg(Virt(dst)), tmp),
-                            Instr::Ugt(..) => Cmovg(Reg(Virt(dst)), tmp),
-                            Instr::Uge(..) => Cmovge(Reg(Virt(dst)), tmp),
-                            Instr::Ult(..) => Cmovl(Reg(Virt(dst)), tmp),
-                            Instr::Ule(..) => Cmovle(Reg(Virt(dst)), tmp),
+                            Instr::Eq(..) => Cmove(dst, tmp),
+                            Instr::Sgt(..) => Cmovg(dst, tmp),
+                            Instr::Sge(..) => Cmovge(dst, tmp),
+                            Instr::Slt(..) => Cmovl(dst, tmp),
+                            Instr::Sle(..) => Cmovle(dst, tmp),
+                            Instr::Ugt(..) => Cmovg(dst, tmp),
+                            Instr::Uge(..) => Cmovge(dst, tmp),
+                            Instr::Ult(..) => Cmovl(dst, tmp),
+                            Instr::Ule(..) => Cmovle(dst, tmp),
                             _ => unreachable!(),
                         };
                         buf.push(cmov_instr);
                     }
 
                     Instr::Ret(ty, rs1) => {
-                        let rs1 = self.v2h.get(&rs1).copied().unwrap_or(Reg(Virt(rs1)));
+                        let rs1 = self.resolve_val(rs1);
                         buf.push(Mov(Reg(Rax), rs1));
                         self.emit_epilogue(&mut buf);
                     }
@@ -156,7 +183,7 @@ impl Emitter {
                 }
             }
         }
-        x86_64Function::new(buf)
+        x86_64Function::new(f.raw_name, buf)
     }
 
     fn emit_prologue(&mut self, buf: &mut Vec<x86_64::Instr>) {

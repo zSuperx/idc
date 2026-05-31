@@ -31,7 +31,7 @@ impl Compiler {
             self.commit(name, span_start)
         };
 
-        self.curr_fn.name = name;
+        self.curr_fn.raw_name = name;
 
         self.expect(Token::LParen);
         let mut args = vec![];

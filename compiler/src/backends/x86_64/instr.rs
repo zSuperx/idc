@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use iformatter::Iformat;
 
-use crate::lir::{BB, LirType, VReg};
+use crate::lir::{BB, LirType, LirVal};
 
 #[derive(Clone, Copy)]
 pub enum Val {
@@ -37,7 +37,7 @@ impl Display for Val {
 #[allow(unused)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reg {
-    Virt(VReg),
+    Virt(usize),
     Rdi, // arg 1
     Rsi, // arg 2
     Rdx, // arg 3
@@ -63,7 +63,7 @@ pub enum Reg {
 impl std::fmt::Display for Reg {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Reg::Virt(reg_id) => f.write_fmt(format_args!("{reg_id}")),
+            Reg::Virt(reg_id) => f.write_fmt(format_args!("%{reg_id}")),
             _ => f.write_str(&format!("{self:?}").to_ascii_lowercase()),
         }
     }

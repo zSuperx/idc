@@ -1,7 +1,6 @@
-fn main(p: *i8) -> i8 {
-  if *p == 69 {
+fn main(argc: i32, argv: **u8) -> i32 {
+  if argc > 2 {
     return 69;
   } else {
-    return *p;
   }
 }
