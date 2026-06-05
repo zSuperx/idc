@@ -2,13 +2,14 @@ use crate::aux::{SymbolInfo, SymbolKind};
 use crate::hir::HirType;
 use crate::hir::*;
 use crate::tir::*;
-use crate::{ast::*, aux::Compiler, hir, tir::TypeId};
+use crate::{ast::*, aux::Compiler, tir::TypeId};
+use crate::prelude::*;
 
 impl Compiler {
-    fn next_var(&mut self, argname: &str) -> VarId {
+    fn next_var(&mut self, argname: &str) -> StringId {
         let id = self.var_count;
         self.var_count += 1;
-        self.symbols.add(format!("{argname}_{id}"))
+        self.symbols.add(format!("{argname}.{id}"))
     }
 
     fn check_type(&mut self, ty: Spanned<HirType>) -> Spanned<TypeId> {
@@ -51,7 +52,6 @@ impl Compiler {
             } => {
                 self.func.env.push_scope();
                 self.func.raw_name = name;
-                self.func.name = Some(self.next_var(name.inner));
                 let mut checked_args = vec![];
                 let mut arg_types = vec![];
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
@@ -240,7 +240,7 @@ impl Compiler {
             }
             HirExprKind::Assign { lhs, rhs } => {
                 let checked_lhs = self.check_expr(*lhs, hint);
-                let mut lhs_ty = checked_lhs.inner.meta;
+                let lhs_ty = checked_lhs.inner.meta;
                 let checked_rhs = self.check_expr(*rhs, Some(lhs_ty));
                 let rhs_ty = checked_rhs.inner.meta;
                 if lhs_ty != rhs_ty {

@@ -1,6 +1,8 @@
 use std::fmt::Display;
 
-use crate::{lir::*, tir::VarId};
+use registry::Id;
+
+pub type StringId = Id<String>;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct BB(pub usize, pub &'static str);
@@ -20,6 +22,8 @@ impl std::fmt::Display for BB {
 pub struct BasicBlock<I> {
     pub name: BB,
     pub instructions: Vec<I>,
+    pub succ: Vec<BB>,
+    pub pred: Vec<BB>,
     pub terminator: I,
 }
 
@@ -29,6 +33,8 @@ impl<I> BasicBlock<I> {
             name,
             instructions,
             terminator,
+            succ: Default::default(),
+            pred: Default::default(),
         }
     }
 }

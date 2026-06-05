@@ -1,8 +1,10 @@
 [package]
-name = "stu"
+name = "wocao"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-iformatter = { version = "0.1.0", path = "../iformatter" }
+bitset = { version = "0.1.0", path = "../bitset" }
+heuristic-graph-coloring = "0.1.0"
 registry = { path = "../registry/" }
+tempfile = "3.27.0"

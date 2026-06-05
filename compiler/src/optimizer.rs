@@ -1,10 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::{
-    ast::{BinOp, UnOp},
-    aux::Compiler,
-    lir::{BasicBlock, Builder, FnCtx, LirInstr, LirVal},
-};
+use crate::{arch::lir::LirVal, aux::Compiler};
+
+use crate::prelude::*;
 
 use LirInstr::*;
 
@@ -28,17 +26,17 @@ impl Compiler {
 
     fn const_fold_bb(&mut self, bb: &mut BasicBlock<LirInstr>, map: &mut HashMap<LirVal, i128>) {
         for i in 0..bb.instructions.len() {
-            match bb.instructions[i] {
-                Copy(ty, dst, rs1) => {
+            match &bb.instructions[i] {
+                Copyr(ty, dst, rs1) => {
                     let v1 = map.get(&rs1).copied();
                     if let Some(imm) = v1 {
-                        map.insert(dst, imm);
+                        map.insert(*dst, imm);
                     }
                 }
                 op @ (Add(ty, dst, rs1, rs2)
                 | Sub(ty, dst, rs1, rs2)
-                | Muls(ty, dst, rs1, rs2)
-                | Mulu(ty, dst, rs1, rs2)
+                | Smul(ty, dst, rs1, rs2)
+                | Umul(ty, dst, rs1, rs2)
                 | Sgt(ty, dst, rs1, rs2)
                 | Sge(ty, dst, rs1, rs2)
                 | Slt(ty, dst, rs1, rs2)
@@ -58,8 +56,8 @@ impl Compiler {
                             let imm = match op {
                                 Add(..) => imm1 + imm2,
                                 Sub(..) => imm1 - imm2,
-                                Muls(..) => imm1 * imm2,
-                                Mulu(..) => (uimm1 * uimm2) as i128,
+                                Smul(..) => imm1 * imm2,
+                                Umul(..) => (uimm1 * uimm2) as i128,
                                 Eq(..) => (imm1 == imm2) as i128,
                                 Sgt(..) => (imm1 > imm2) as i128,
                                 Sge(..) => (imm1 >= imm2) as i128,
@@ -71,7 +69,7 @@ impl Compiler {
                                 Ule(..) => (uimm1 <= uimm2) as i128,
                                 _ => unreachable!(),
                             };
-                            map.insert(dst, imm);
+                            map.insert(*dst, imm);
                         }
                         _ => {}
                     }
@@ -85,13 +83,13 @@ impl Compiler {
     fn track_live_code(&mut self, bb: &BasicBlock<LirInstr>, is_read: &mut HashSet<LirVal>) {
         for instr in bb.instructions.iter() {
             match *instr {
-                Ret(_, rs1) | Br(rs1, ..) | Copy(_, _, rs1) | Load(_, _, rs1) => {
+                Ret(_, rs1) | Br(rs1, ..) | Copyr(_, _, rs1) | Load(_, _, rs1) => {
                     is_read.insert(rs1);
                 }
                 Add(_, _, rs1, rs2)
                 | Sub(_, _, rs1, rs2)
-                | Muls(_, _, rs1, rs2)
-                | Mulu(_, _, rs1, rs2)
+                | Smul(_, _, rs1, rs2)
+                | Umul(_, _, rs1, rs2)
                 | Eq(_, _, rs1, rs2)
                 | Sgt(_, _, rs1, rs2)
                 | Sge(_, _, rs1, rs2)
@@ -113,14 +111,14 @@ impl Compiler {
     // This pass should look at all instructions who PRODUCE a value. If that value is read, it is
     // considered a useful instructions
     fn dead_code_elim(&mut self, bb: &mut BasicBlock<LirInstr>, is_read: &HashSet<LirVal>) {
-        let mut survivors = vec![];
-        for instr in bb.instructions.iter() {
-            match *instr {
-                Copy(_, dst, ..)
+        let old = std::mem::take(&mut bb.instructions);
+        for instr in old {
+            match instr {
+                Copyr(_, dst, ..)
                 | Add(_, dst, ..)
                 | Sub(_, dst, ..)
-                | Muls(_, dst, ..)
-                | Mulu(_, dst, ..)
+                | Smul(_, dst, ..)
+                | Umul(_, dst, ..)
                 | Eq(_, dst, ..)
                 | Sgt(_, dst, ..)
                 | Sge(_, dst, ..)
@@ -132,12 +130,11 @@ impl Compiler {
                 | Ule(_, dst, ..)
                 | Load(_, dst, ..) => {
                     if is_read.contains(&dst) {
-                        survivors.push(*instr);
+                        bb.instructions.push(instr);
                     }
                 }
-                _ => survivors.push(*instr),
+                _ => bb.instructions.push(instr),
             }
         }
-        _ = std::mem::replace(&mut bb.instructions, survivors);
     }
 }

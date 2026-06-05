@@ -1,15 +1,13 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::HashMap;
+
+use crate::prelude::*;
 
 use registry::Registry;
 
 use crate::{
+    arch::lir::VVal,
     ast::*,
-    lir::{self, BB, BasicBlock, Builder, FnCtx, LirInstr, LirVal, VVal},
-    tir::{TirType, TypeId, VarId},
-    utils::Env,
+    tir::{TirType, TypeId},
 };
 
 #[derive(Default)]
@@ -85,8 +83,19 @@ pub enum SymbolKind {
 
 #[derive(Debug, Clone, Copy)]
 pub struct SymbolInfo {
-    pub name: VarId,
+    pub name: StringId,
     pub ty: TypeId,
     pub kind: SymbolKind,
     pub address_taken: bool,
+}
+
+use crate::ast::Spanned;
+
+#[derive(Debug, Default)]
+pub struct FnCtx {
+    pub raw_name: Spanned<&'static str>,
+    pub env: Env<&'static str, (StringId, TypeId)>, // Tracks scopes and string -> var, type mappings
+    pub return_type: Option<Spanned<TypeId>>,       // Return type of current function
+    pub symbol_table: HashMap<StringId, SymbolInfo>,
+    pub var2val: HashMap<StringId, VVal>,
 }

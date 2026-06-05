@@ -1,15 +1,13 @@
 mod types;
-use registry::Id;
 pub use types::*;
 
 use crate::ast::*;
+use crate::prelude::*;
 
 type Meta = TypeId;
 type NumRep = i128;
 type Type = TypeId;
-type Ident = VarId;
-
-pub type VarId = Id<String>;
+type Ident = StringId;
 
 pub type TirExprKind = ExprKind<Meta, NumRep, Ident>;
 pub type TirExpr = Expr<Meta, NumRep, Ident>;

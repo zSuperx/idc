@@ -1,18 +1,25 @@
-use std::collections::HashMap;
+// This file is responsible for translating LIR to x86 MIR and then performing register
+// live-analysis and register allocation.
+//
+// Live analysis is based off the algorithm described here:
+// https://en.wikipedia.org/wiki/Live-variable_analysis
+use std::collections::{HashMap, HashSet};
 
-use crate::ast::BinOp;
-use crate::backends::x86_64::instr::x86Instr;
-use crate::backends::x86_64::{self, x86Function};
-use crate::lir::{BB, BasicBlock, Builder, FnCtx, LirInstr, LirType, LirVal};
-use crate::utils::align_n;
+use crate::arch::lir::{LirType, LirVal};
+use crate::arch::x86::*;
+use crate::autogen::LirInstr;
+use crate::autogen::x86Instr;
+use crate::prelude::*;
 
-use x86_64::x86Reg::*;
-use x86_64::x86Val::*;
-use x86_64::x86Instr::*;
+use bitset::BitSet;
+use heuristic_graph_coloring::{VecVecGraph, color_greedy_by_degree};
+use x86Instr::*;
+use x86Reg::*;
+use x86Val::*;
 
 #[derive(Default)]
 pub struct Emitter {
-    v2h: HashMap<LirVal, x86_64::x86Val>,
+    v2h: HashMap<LirVal, x86Val>,
     v_rsp: i128,
 }
 
@@ -21,21 +28,21 @@ impl Emitter {
         Self::default()
     }
 
-    fn resolve_ptr(&self, v: LirVal, ty: LirType) -> x86_64::x86Val {
+    fn resolve_ptr(&self, v: LirVal, ty: LirType) -> x86Val {
         match v {
-            LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Offset(ty, Virt(id), 0)),
+            LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Mem(ty, Virt(id), 0)),
             LirVal::Imm(_) => panic!("Resolve pointer called on immediate value"),
         }
     }
 
-    fn resolve_val(&self, v: LirVal) -> x86_64::x86Val {
+    fn resolve_val(&self, v: LirVal) -> x86Val {
         match v {
             LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Reg(Virt(id))),
             LirVal::Imm(i) => Imm(i),
         }
     }
 
-    pub fn translate_func(&mut self, mut f: Builder<LirInstr>) -> Builder<x86Instr> {
+    pub fn translate_func(&mut self, f: Builder<LirInstr>) -> Builder<x86Instr> {
         let mut builder = Builder::new(f.name, f.bb_count, f.vreg_count);
 
         let prologue = builder.next_bb("prologue");
@@ -50,7 +57,7 @@ impl Emitter {
             builder.start_new_block(bb.name);
             for i in bb.instructions.iter() {
                 match *i {
-                    LirInstr::Param(ty, dst, num, name) => {
+                    LirInstr::Param(ty, dst, name, num) => {
                         let loc = match num {
                             0 => Reg(Rdi),
                             1 => Reg(Rsi),
@@ -58,21 +65,21 @@ impl Emitter {
                             3 => Reg(Rcx),
                             4 => Reg(R8),
                             5 => Reg(R9),
-                            _ => Offset(ty, Rbp, num.saturating_sub(6) as i128 + 8),
+                            _ => Mem(ty, Rbp, num.saturating_sub(6) as i128 + 8),
                         };
                         builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
                     LirInstr::Alloc(ty, dst, name) => {
                         let size = align_n(ty.size() as i128, ty.alignment());
-                        let loc = Offset(ty, Rbp, self.v_rsp - 8);
+                        let loc = Mem(ty, Rbp, self.v_rsp - 8);
                         let aligned_size = align_n(size, 16);
                         self.v_rsp -= aligned_size;
                         builder.emit(Sub(Reg(Rsp), Imm(aligned_size as i128)));
                         builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
-                    LirInstr::Copy(ty, dst, rs1) => {
+                    LirInstr::Copyr(ty, dst, rs1) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         builder.emit(Mov(dst, rs1))
@@ -86,8 +93,8 @@ impl Emitter {
                         assert!(matches!(dst, Reg(_)));
 
                         let rs1 = match rs1 {
-                            Reg(reg) => Offset(ty, reg, 0),
-                            Offset(..) => rs1,
+                            Reg(reg) => Mem(ty, reg, 0),
+                            Mem(..) => rs1,
                             Imm(_) => unreachable!(),
                         };
 
@@ -99,11 +106,11 @@ impl Emitter {
                         let rs2 = self.resolve_val(rs2);
 
                         // I actually don't know if this will always be true
-                        assert!(matches!(rs1, Offset(..)));
+                        assert!(matches!(rs1, Mem(..)));
 
                         match rs2 {
-                            Offset(..) => {
-                                let tmp = self.resolve_val(builder.next_reg());
+                            Mem(..) => {
+                                let tmp = self.resolve_val(LirVal::Reg(builder.next_reg()));
                                 builder.emit(Lea(tmp, rs2));
                                 builder.emit(Mov(rs1, tmp));
                             }
@@ -133,14 +140,14 @@ impl Emitter {
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Sub(dst, rs2));
                     }
-                    LirInstr::Muls(ty, dst, rs1, rs2) => {
+                    LirInstr::Smul(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
                         builder.emit(Mov(dst, rs1));
-                        builder.emit(IMul(dst, rs2));
+                        builder.emit(Imul(dst, rs2));
                     }
-                    LirInstr::Mulu(ty, dst, rs1, rs2) => {
+                    LirInstr::Umul(ty, dst, rs1, rs2) => {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
@@ -160,7 +167,7 @@ impl Emitter {
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
                         builder.emit(Cmp(rs1, rs2));
-                        let tmp = self.resolve_val(builder.next_reg());
+                        let tmp = self.resolve_val(LirVal::Reg(builder.next_reg()));
                         builder.emit(Mov(tmp, Imm(1)));
                         let cmov_instr = match i {
                             LirInstr::Eq(..) => Cmove(dst, tmp),
@@ -183,9 +190,11 @@ impl Emitter {
                         builder.emit(Jmp(epilogue));
                     }
 
-                    LirInstr::RetVoid => {
+                    LirInstr::Retv => {
                         builder.emit(Jmp(epilogue));
                     }
+                    LirInstr::Udiv(lir_type, lir_val, lir_val1, lir_val2) => todo!(),
+                    LirInstr::Sdiv(lir_type, lir_val, lir_val1, lir_val2) => todo!(),
                 }
             }
         }
@@ -197,13 +206,82 @@ impl Emitter {
         let exit_bb = builder.next_bb("");
         builder.start_new_block(exit_bb);
 
+        self.allocate_registers(&builder);
+
         builder
     }
 
-    pub fn allocate_registers(
-        &mut self,
-        instructions: Vec<x86Instr>,
-    ) -> Vec<x86Instr> {
-        todo!()
+    pub fn allocate_registers(&mut self, builder: &Builder<x86Instr>) -> Vec<x86Instr> {
+        let total_regs = builder.vreg_count + 16;
+
+        let out = vec![];
+
+        let mut live_in = vec![BitSet::with_size(total_regs); builder.bbs.len()];
+        let mut live_out = vec![BitSet::with_size(total_regs); builder.bbs.len()];
+        let mut def = vec![BitSet::with_size(total_regs); builder.bbs.len()];
+        let mut use_ = vec![BitSet::with_size(total_regs); builder.bbs.len()];
+
+        for (bbid, bb) in builder.bbs.iter().enumerate() {
+            for i in bb.instructions.iter() {
+                for src in i.srcs() {
+                    match *src {
+                        Reg(reg) | Mem(_, reg, _) => {
+                            if !def[bbid].contains(reg.into()) {
+                                use_[bbid].insert(reg.into());
+                            }
+                        }
+                        Imm(_) => {}
+                    }
+                }
+
+                for dst in i.dsts() {
+                    match *dst {
+                        Reg(reg) | Mem(_, reg, _) => {
+                            def[bbid].insert(reg.into());
+                        }
+                        Imm(_) => {}
+                    }
+                }
+            }
+        }
+        let mut worklist = vec![builder.bbs.len() - 1];
+        let mut visited = HashSet::new();
+
+        while let Some(bb_index) = worklist.pop() {
+            if !visited.insert(bb_index) {
+                continue;
+            }
+
+            let live_in0 = live_in[bb_index].clone();
+            let live_out0 = live_out[bb_index].clone();
+            // TODO: In order to proceed, we must have a way to get a particular block's successors
+            // This is in theory not difficult to do since it requires simply observing the terminal
+            // instruction and seeing where it branches. This, however, is architecture specific. A
+            // better solution would be to modify gen.py to auto-generate a 
+            //
+            // `fn targets(&self) -> Vec<BB>`
+            //
+            // that we can use before this loop (or even in the lowering phase). Part of this
+            // limitation is also because `Builder<I>` is generic over an instruction type `I`, and
+            // its API does not give a way to encode successor blocks in the lowering phase. This is
+            // another avenue that can be explored.
+
+            let tmp = BitSet::new();
+        }
+
+        let phys = &[
+            Rdi, Rsi, Rdx, Rcx, R8, R9, Rax, R10, R11, Rsp, Rbp, Rbx, R12, R13, R14, R15,
+        ];
+        let mut graph = VecVecGraph::new(builder.vreg_count + 16);
+
+        for i in 0..phys.len() {
+            for j in i + 1..phys.len() {
+                graph.add_edge(phys[i].into(), phys[j].into());
+            }
+        }
+
+        let coloring = color_greedy_by_degree(&graph);
+
+        out
     }
 }

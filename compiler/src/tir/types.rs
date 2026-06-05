@@ -1,8 +1,6 @@
-use std::{
-    collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData, ops::Deref, sync::LazyLock,
-};
+use std::hash::Hash;
 
-use registry::{Id, Registry};
+use registry::*;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub enum TirType {

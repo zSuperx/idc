@@ -1,25 +1,34 @@
-#![feature(trim_prefix_suffix)]
-#![allow(unused)]
 #![allow(static_mut_refs)]
+#![allow(nonstandard_style)]
+#![allow(unused)]
+#![warn(unused_imports)]
 use std::{
     collections::HashSet,
     fmt::Write,
+    process::Command,
     sync::{LazyLock, OnceLock},
 };
 
-use crate::{aux::Compiler, backends::x86_64};
+use crate::{arch::x86, aux::Compiler};
 
+mod arch;
 mod ast;
+mod autogen;
 mod aux;
-mod backends;
 mod checker;
 mod hir;
-mod lir;
 mod lower;
 mod optimizer;
 mod parser;
+mod prelude;
 mod tir;
-mod utils;
+
+macro_rules! die {
+    ($($fmtargs:tt)*) => {{
+        eprintln!($($fmtargs)*);
+        ::std::process::exit(1);
+    }};
+}
 
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
 pub static mut STRINGS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
@@ -48,17 +57,6 @@ fn main() {
     let prog = comp.compile_prog();
 
     let mut buf = String::new();
-    for func in prog {
-        match cfg.target {
-            Target::IR => buf.write_fmt(format_args!("{}", func)).unwrap(),
-            Target::x86 => {
-                let mut emitter = x86_64::Emitter::new();
-                let func = emitter.translate_func(func);
-                buf.write_fmt(format_args!("{func}")).unwrap();
-            }
-        }
-    }
-
     match cfg.target {
         Target::IR => {}
         Target::x86 => {
@@ -66,37 +64,109 @@ fn main() {
         }
     }
 
-    if cfg.output == "-" {
-        println!("{buf}");
-    } else {
-        std::fs::write(cfg.output, buf).unwrap();
+    // Linearize
+    for func in prog {
+        match cfg.target {
+            Target::IR => buf.write_fmt(format_args!("{}", func)).unwrap(),
+            Target::x86 => {
+                let mut emitter = x86::Emitter::new();
+                let func = emitter.translate_func(func);
+                buf.write_fmt(format_args!("{func}")).unwrap();
+            }
+        }
+    }
+
+    match cfg.action {
+        Action::EmitAsm => {
+            if cfg.output == "-" {
+                println!("{buf}");
+            } else {
+                std::fs::write(&cfg.output, &buf).unwrap();
+            }
+            return;
+        }
+
+        Action::CompileOnly => {
+            let asm = tempfile::NamedTempFile::new().unwrap();
+
+            std::fs::write(asm.path(), &buf).unwrap();
+
+            let status = Command::new("nasm")
+                .arg("-felf64")
+                .arg(asm.path())
+                .arg("-o")
+                .arg(&cfg.output)
+                .status()
+                .unwrap();
+
+            if !status.success() {
+                die!("assembly failed");
+            }
+
+            return;
+        }
+
+        Action::AssembleAndLink => {
+            let asm = tempfile::NamedTempFile::new().unwrap();
+            let obj = tempfile::NamedTempFile::new().unwrap();
+
+            std::fs::write(asm.path(), &buf).unwrap();
+
+            let status = Command::new("nasm")
+                .arg("-felf64")
+                .arg(asm.path())
+                .arg("-o")
+                .arg(obj.path())
+                .status()
+                .unwrap();
+
+            if !status.success() {
+                die!("assembly failed");
+            }
+
+            let status = Command::new("ld")
+                .arg(obj.path())
+                .arg("runtime/rt.o")
+                .arg("-o")
+                .arg(&cfg.output)
+                .status()
+                .unwrap();
+
+            if !status.success() {
+                die!("link failed");
+            }
+        }
     }
 }
 
 #[allow(nonstandard_style)]
+#[derive(Debug, Clone, Copy)]
 pub enum Target {
     IR,
     x86,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum Action {
+    EmitAsm = 1,
+    CompileOnly = 2,
+    AssembleAndLink = 3,
+}
+
+#[derive(Debug)]
 struct Config {
     target: Target,
     input: String,
     output: String,
-}
-
-macro_rules! die {
-    ($($fmtargs:tt)*) => {{
-        eprintln!($($fmtargs)*);
-        ::std::process::exit(1);
-    }};
+    action: Action,
 }
 
 fn parse_args() -> Config {
     // Default values
-    let mut target = Target::x86;
+    let mut target = None;
     let mut input = None;
     let mut output = None;
+    let mut action = None;
 
     // Setup args
     let mut args = std::env::args().peekable();
@@ -104,8 +174,9 @@ fn parse_args() -> Config {
 
     // Parse args
     while let Some(arg) = args.next() {
-        match arg.trim() {
-            flag @ ("-h" | "--help") => {
+        let flag = arg.trim();
+        match flag {
+            "-h" | "--help" => {
                 eprintln!("Usage: {argv0} <INPUT> [-o <OUTPUT>] [-t <TARGET>]");
                 eprintln!();
                 eprintln!("Available targets:");
@@ -113,17 +184,38 @@ fn parse_args() -> Config {
                 eprintln!("\t x86\tx86 assembly");
                 die!();
             }
-            flag @ ("-t" | "--target") => {
+            "-t" | "--target" => {
                 let Some(target_str) = args.next() else {
                     die!("{flag} flag expects target");
                 };
-                target = match target_str.to_lowercase().as_str() {
+                let target_enum = match target_str.to_lowercase().as_str() {
                     "x86" => Target::x86,
-                    "ir" => Target::IR,
                     _ => die!("Unknown target: {target_str}"),
+                };
+
+                if target.replace(target_enum).is_some() {
+                    die!("Only 1 target allowed");
                 }
             }
-            flag @ ("-o" | "--output") => {
+            "-E" => {
+                if action.replace(Action::EmitAsm).is_some() {
+                    die!("Only 1 action allowed. Pass -h for more info");
+                }
+                if target.replace(Target::IR).is_some() {
+                    die!("-E cannot be used with -t");
+                }
+            }
+            "-S" => {
+                if action.replace(Action::EmitAsm).is_some() {
+                    die!("Only 1 action allowed. Pass -h for more info");
+                }
+            }
+            "-c" => {
+                if action.replace(Action::CompileOnly).is_some() {
+                    die!("Only 1 action allowed. Pass -h for more info");
+                }
+            }
+            "-o" | "--output" => {
                 let Some(output_str) = args.next() else {
                     die!("{flag} flag expects target");
                 };
@@ -132,7 +224,7 @@ fn parse_args() -> Config {
                 }
                 output = Some(output_str);
             }
-            s => {
+            _ => {
                 if input.is_some() {
                     die!("Only 1 file can be provided as input");
                 }
@@ -140,22 +232,30 @@ fn parse_args() -> Config {
             }
         }
     }
-
+    let action = action.unwrap_or(Action::AssembleAndLink);
+    let target = target.unwrap_or(Target::x86);
     let Some(input) = input else {
         die!("No input file");
     };
     let default_output = {
         let ext = input.rfind(".");
         let base = input.get(..ext.unwrap_or(input.len())).unwrap();
-        match target {
-            Target::IR => format!("{base}.s"),
-            Target::x86 => format!("{base}.ir"),
+        match action {
+            Action::EmitAsm => match target {
+                Target::IR => format!("{base}.ir"),
+                _ => format!("{base}.s"),
+            },
+            Action::CompileOnly => format!("{base}.o"),
+            Action::AssembleAndLink => base.to_string(),
         }
     };
+
     let output = output.unwrap_or(default_output);
-    Config {
+    let c = Config {
         target,
         input,
         output,
-    }
+        action,
+    };
+    c
 }

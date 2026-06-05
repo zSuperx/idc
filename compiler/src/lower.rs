@@ -1,9 +1,11 @@
 use crate::{
+    arch::lir::*,
     ast::*,
     aux::{Compiler, SymbolInfo, SymbolKind},
-    lir::*,
     tir::*,
 };
+
+use crate::prelude::*;
 
 use LirInstr::*;
 
@@ -31,15 +33,15 @@ impl Compiler {
                     // TODO: alloc params and locals
                     match kind {
                         SymbolKind::Local => {
-                            let dst = builder.next_reg();
+                            let dst = LirVal::Reg(builder.next_reg());
                             builder.emit(Alloc(ty, dst, name));
                             self.func.var2val.insert(name, VVal::Ptr(dst));
                         }
                         SymbolKind::Param(num) => {
-                            let dst = builder.next_reg();
-                            builder.emit(Param(ty, dst, num, name));
+                            let dst = LirVal::Reg(builder.next_reg());
+                            builder.emit(Param(ty, dst, name, num));
                             if address_taken {
-                                let new_dst = builder.next_reg();
+                                let new_dst = LirVal::Reg(builder.next_reg());
                                 builder.emit(Alloc(ty, new_dst, name));
                                 builder.emit(Store(ty, new_dst, dst));
                                 self.func.var2val.insert(name, VVal::Ptr(new_dst));
@@ -58,7 +60,7 @@ impl Compiler {
 
                 if builder.get_terminator().is_none() {
                     match returns.inner.lookup() {
-                        TirType::Void => builder.buf.push(RetVoid),
+                        TirType::Void => builder.buf.push(Retv),
                         _ => panic!(
                             "Control flow reaches the end of a function that was expected to return {returns}"
                         ),
@@ -67,6 +69,16 @@ impl Compiler {
 
                 let exit_bb = builder.next_bb("");
                 builder.start_new_block(exit_bb);
+
+                for bb in builder.bbs.iter_mut() {
+                    match &bb.terminator {
+                        Br(lir_val, tgt1, tgt2) => bb.succ.extend_from_slice(&[*tgt1, *tgt2]),
+                        Jmp(tgt) => bb.succ.push(*tgt),
+                        Retv => {}
+                        Ret(lir_type, lir_val) => {}
+                        x => panic!("How did this end up as a terminator? {x}"),
+                    }
+                }
 
                 builder
             }
@@ -97,8 +109,8 @@ impl Compiler {
                 // IF BB
                 builder.start_new_block(if_bb);
                 let cond_val = self.lower_expr(builder, cond);
-                let jmp_else = Br(cond_val, then_bb, else_bb);
-                builder.emit(jmp_else);
+                let branch = Br(cond_val, then_bb, else_bb);
+                builder.emit(branch);
 
                 // THEN BB
                 builder.start_new_block(then_bb);
@@ -116,13 +128,13 @@ impl Compiler {
 
                 // END BB (empty)
                 match (then_term, else_term) {
-                    (Some(t), Some(e)) if t.is_ret() && e.is_ret() => {}
+                    (Some(t), Some(e)) if is_ret(&t) && is_ret(&e) => {}
                     _ => builder.start_new_block(end_bb),
                 }
             }
             TirStmtKind::Return(spanned) => {
                 if *spanned.inner.meta.lookup() == TirType::Void {
-                    builder.emit(RetVoid);
+                    builder.emit(Retv);
                 } else {
                     let ty = spanned.inner.meta.into();
                     let rs1 = self.lower_expr(builder, spanned);
@@ -141,7 +153,7 @@ impl Compiler {
     }
 
     fn lower_expr(&mut self, builder: &mut Builder<LirInstr>, expr: Spanned<TirExpr>) -> LirVal {
-        let dst = builder.next_reg();
+        let dst = LirVal::Reg(builder.next_reg());
         match expr.inner.kind {
             TirExprKind::Void => dst,
             TirExprKind::Num(imm) => LirVal::Imm(imm),
@@ -168,7 +180,7 @@ impl Compiler {
                 match op {
                     UnOp::Not => todo!(),
                     UnOp::Neg => {
-                        builder.emit(Muls(ty, dst, rs1, LirVal::Imm(-1)));
+                        builder.emit(Smul(ty, dst, rs1, LirVal::Imm(-1)));
                     }
                 }
                 dst
@@ -181,8 +193,8 @@ impl Compiler {
                 let instr = match (op, is_signed) {
                     (BinOp::Add, _) => Add(ty, dst, rs1, rs2),
                     (BinOp::Sub, _) => Sub(ty, dst, rs1, rs2),
-                    (BinOp::Mul, true) => Muls(ty, dst, rs1, rs2),
-                    (BinOp::Mul, false) => Mulu(ty, dst, rs1, rs2),
+                    (BinOp::Mul, true) => Smul(ty, dst, rs1, rs2),
+                    (BinOp::Mul, false) => Umul(ty, dst, rs1, rs2),
                     (BinOp::Div, true) => todo!(),
                     (BinOp::Div, false) => todo!(),
                     (BinOp::Eq, _) => Eq(ty, dst, rs1, rs2),
@@ -210,7 +222,7 @@ impl Compiler {
                             builder.emit(Store(ty, rs1, rs2));
                         }
                         VVal::Reg(rs1) => {
-                            builder.emit(Copy(ty, rs1, rs2));
+                            builder.emit(Copyr(ty, rs1, rs2));
                         }
                     }
                     rs2
@@ -248,4 +260,8 @@ impl Compiler {
             TirExprKind::Call { callee, args } => todo!(),
         }
     }
+}
+
+fn is_ret(i: &LirInstr) -> bool {
+    matches!(i, LirInstr::Ret(..) | LirInstr::Retv)
 }

@@ -1,22 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
-
-use crate::{
-    ast::Spanned,
-    aux::SymbolInfo,
-    lir::{BB, BasicBlock, Instr, LirInstr, LirVal, VVal},
-    tir::{TypeId, VarId},
-    utils::Env,
-};
-
-#[derive(Debug, Default)]
-pub struct FnCtx {
-    pub name: Option<VarId>,
-    pub raw_name: Spanned<&'static str>,
-    pub env: Env<&'static str, (VarId, TypeId)>, // Tracks scopes and string -> var, type mappings
-    pub return_type: Option<Spanned<TypeId>>,    // Return type of current function
-    pub symbol_table: HashMap<VarId, SymbolInfo>,
-    pub var2val: HashMap<VarId, VVal>,
-}
+use crate::prelude::*;
 
 #[derive(Debug)]
 pub struct Builder<I> {
@@ -30,7 +12,7 @@ pub struct Builder<I> {
     pub curr_bb_name: Option<BB>,
 }
 
-impl<I: Display> std::fmt::Display for Builder<I> {
+impl<I: std::fmt::Display> std::fmt::Display for Builder<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}:\n", self.name))?;
         for bb in self.bbs.iter() {
@@ -62,10 +44,10 @@ impl<I: Clone + Instr> Builder<I> {
         s
     }
 
-    pub fn next_reg(&mut self) -> LirVal {
+    pub fn next_reg(&mut self) -> usize {
         let id = self.vreg_count;
         self.vreg_count += 1;
-        LirVal::Reg(id)
+        id
     }
 
     pub fn next_bb(&mut self, name: &'static str) -> BB {
