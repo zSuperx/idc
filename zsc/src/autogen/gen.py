@@ -98,13 +98,13 @@ impl std::fmt::Display for {self.enum_name} {{
 impl Instr for {self.enum_name} {{
     type Val = {self.val_name};
 
-    fn srcs(&self) -> Vec<&Self::Val> {{
+    fn srcs(&mut self) -> impl Iterator<Item = &mut Self::Val> {{
         match self {{
 {src_arms}
         }}
     }}
 
-    fn dsts(&self) -> Vec<&Self::Val> {{
+    fn dsts(&mut self) -> impl Iterator<Item = &mut Self::Val> {{
         match self {{
 {dst_arms}
         }}
@@ -145,9 +145,9 @@ def gen_enum_variant(instr: InstrInfo) -> str:
 
 def gen_srcs(instr: InstrInfo) -> str:
     vals = ", ".join(f"v{i}" for i in instr.ins)
-    return f"vec![{vals}]"
+    return f"vec![{vals}].into_iter()"
 
 
 def gen_dsts(instr: InstrInfo) -> str:
     vals = ", ".join(f"v{i}" for i in instr.outs)
-    return f"vec![{vals}]"
+    return f"vec![{vals}].into_iter()"

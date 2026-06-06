@@ -121,10 +121,10 @@ fn main() {
                 .unwrap();
 
             if !status.success() {
-                die!("assembly failed");
+                die!("assembling failed");
             }
 
-            let status = Command::new("ld")
+            let status = Command::new("mold")
                 .arg(obj.path())
                 .arg("runtime/rt.o")
                 .arg("-o")
@@ -133,7 +133,7 @@ fn main() {
                 .unwrap();
 
             if !status.success() {
-                die!("link failed");
+                die!("linking failed");
             }
         }
     }

@@ -1,10 +1,11 @@
 from gen import *
 
+V = "x86Val"
 
 def binop(name) -> InstrInfo:
     return InstrInfo(
         name=name,
-        fields=["x86Val", "x86Val"],
+        fields=[V, V],
         outs=[0],
         ins=[0, 1],
         is_terminator=False,
@@ -16,7 +17,7 @@ def jump(name) -> InstrInfo:
 
 
 def move(name) -> InstrInfo:
-    return InstrInfo(name=name, fields=["x86Val", "x86Val"], ins=[1], outs=[0])
+    return InstrInfo(name=name, fields=[V, V], ins=[1], outs=[0])
 
 
 INSTRUCTIONS = [
@@ -43,12 +44,12 @@ INSTRUCTIONS = [
     move("cmovg"),
     move("cmovge"),
     #
-    InstrInfo("cmp", ["x86Val", "x86Val"]),
+    InstrInfo("cmp", [V, V], ins=[0, 1]),
     InstrInfo("comment", ["String"], fmt="; {v0}"),
-    InstrInfo("push", ["x86Val"], outs=[], ins=[0]),
-    InstrInfo("pop", ["x86Val"], outs=[0], ins=[]),
+    InstrInfo("push", [V], outs=[], ins=[0]),
+    InstrInfo("pop", [V], outs=[0], ins=[]),
     # terminators
-    InstrInfo("call", ["x86Val"], ins=[0]),
+    InstrInfo("call", [V], ins=[0]),
     InstrInfo("ret", is_terminator=True),
     jmp := jump("jmp"),
     jump("je"),
@@ -66,7 +67,7 @@ INSTRUCTIONS = [
 iclass = InstructionClass(
     arch="x86",
     enum="x86Instr",
-    val="x86Val",
+    val=V,
     instrs=INSTRUCTIONS,
     uncond_jump=jmp,
 )

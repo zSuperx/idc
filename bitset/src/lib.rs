@@ -2,7 +2,7 @@
 ///
 /// This is implemented internally as a `Vec<u128>`, and uses bitwise operations in order to
 /// implement set functions like union, difference, and intersect.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq, Eq)]
 pub struct BitSet(Vec<u128>);
 
 impl BitSet {
@@ -30,7 +30,7 @@ impl BitSet {
         Self(vec![0; (size / 128) + 1])
     }
 
-    /// Inserts an index into the set and returns whether that index was already present. 
+    /// Inserts an index into the set and returns whether that index was already present.
     ///
     /// If the given index is larger than the capcity of the map, the map is resized to fit it.
     ///
@@ -48,7 +48,7 @@ impl BitSet {
         ret
     }
 
-    /// Removes the given index from the set and returns whether an item was actually removed. 
+    /// Removes the given index from the set and returns whether an item was actually removed.
     ///
     /// If the index is larger than the capacity of the map, the map is NOT resized and `false` is
     /// returned.
@@ -110,6 +110,18 @@ impl BitSet {
                 .collect(),
         )
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = usize> {
+        let mut vec = vec![];
+        for (index, bucket) in self.0.iter().enumerate() {
+            for subindex in 0..128 {
+                if (*bucket & (1 << subindex)) != 0 {
+                    vec.push(subindex + index * 128);
+                }
+            }
+        }
+        vec.into_iter()
+    }
 }
 
 impl std::fmt::Debug for BitSet {
@@ -123,12 +135,8 @@ impl std::fmt::Debug for BitSet {
 
 impl std::fmt::Display for BitSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (index, bucket) in self.0.iter().enumerate() {
-            for subindex in 0..128 {
-                if (*bucket & (1 << subindex)) != 0 {
-                    f.write_fmt(format_args!("{} ", subindex + index * 128))?;
-                }
-            }
+        for index in self.iter() {
+            f.write_fmt(format_args!("{} ", index))?;
         }
         Ok(())
     }

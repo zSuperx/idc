@@ -1,9 +1,5 @@
 use std::fmt::Display;
 
-use registry::Id;
-
-pub type StringId = Id<String>;
-
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct BB(pub usize, pub &'static str);
 
@@ -23,7 +19,7 @@ pub struct BasicBlock<I> {
     pub name: BB,
     pub instructions: Vec<I>,
     pub succ: Vec<BB>,
-    pub pred: Vec<BB>,
+    pub pred: Vec<BB>, // currently unused
     pub terminator: I,
 }
 

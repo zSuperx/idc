@@ -67,15 +67,18 @@ impl Compiler {
                     }
                 }
 
+                // This is done just to flush any instructions in the Basic Block buffer
                 let exit_bb = builder.next_bb("");
                 builder.start_new_block(exit_bb);
 
+                // Do a final loop to compute each blocks' successors from its terminator
+                // instruction
                 for bb in builder.bbs.iter_mut() {
                     match &bb.terminator {
                         Br(lir_val, tgt1, tgt2) => bb.succ.extend_from_slice(&[*tgt1, *tgt2]),
                         Jmp(tgt) => bb.succ.push(*tgt),
                         Retv => {}
-                        Ret(lir_type, lir_val) => {}
+                        Ret(..) => {}
                         x => panic!("How did this end up as a terminator? {x}"),
                     }
                 }

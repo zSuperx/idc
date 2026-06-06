@@ -7,6 +7,6 @@ pub trait Instr {
 
     fn uncond_jump(target: BB) -> Self;
 
-    fn dsts(&self) -> Vec<&Self::Val>;
-    fn srcs(&self) -> Vec<&Self::Val>;
+    fn dsts(&mut self) -> impl Iterator<Item = &mut Self::Val>;
+    fn srcs(&mut self) -> impl Iterator<Item = &mut Self::Val>;
 }

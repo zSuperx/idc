@@ -14,6 +14,9 @@ mod env;
 pub use env::*;
 
 mod utils;
+use registry::Id;
 pub use utils::*;
 
 pub use crate::autogen::*;
+
+pub type StringId = Id<String>;

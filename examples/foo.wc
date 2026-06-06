@@ -1,6 +1,0 @@
-fn main(argc: u32, argv: **u8) -> i32 {
-  let x = 5;
-  let y = 3497389;
-  let z = x + y;
-  return x * z;
-}

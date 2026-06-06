@@ -1,10 +1,8 @@
-use crate::arch::lir::LirType;
-
 #[derive(Clone, Copy, Debug)]
 pub enum x86Val {
     Imm(i128),
     Reg(x86Reg),
-    Mem(LirType, x86Reg, i128),
+    Mem(usize, x86Reg, i128),
 }
 
 impl std::fmt::Display for x86Val {
@@ -12,8 +10,8 @@ impl std::fmt::Display for x86Val {
         match self {
             x86Val::Imm(imm) => f.write_fmt(format_args!("{imm}")),
             x86Val::Reg(reg) => f.write_fmt(format_args!("{reg}")),
-            x86Val::Mem(ty, reg, imm) => {
-                let width_spec = match ty.size() {
+            x86Val::Mem(size, reg, imm) => {
+                let width_spec = match size {
                     1 => "byte",
                     2 => "word",
                     4 => "dword",
@@ -57,8 +55,30 @@ pub enum x86Reg {
     Virt(usize),
 }
 
-impl Into<usize> for x86Reg {
-    fn into(self) -> usize {
+impl x86Reg {
+    pub fn from_usize(num: usize) -> Self {
+        match num {
+            0 => x86Reg::Rdi,
+            1 => x86Reg::Rsi,
+            2 => x86Reg::Rdx,
+            3 => x86Reg::Rcx,
+            4 => x86Reg::R8,
+            5 => x86Reg::R9,
+            6 => x86Reg::Rax,
+            7 => x86Reg::R10,
+            8 => x86Reg::R11,
+            9 => x86Reg::Rsp,
+            10 => x86Reg::Rbp,
+            11 => x86Reg::Rbx,
+            12 => x86Reg::R12,
+            13 => x86Reg::R13,
+            14 => x86Reg::R14,
+            15 => x86Reg::R15,
+            x => panic!("Unmapped registers {x}"),
+        }
+    }
+
+    pub fn into_usize(self) -> usize {
         match self {
             x86Reg::Rdi => 0,
             x86Reg::Rsi => 1,

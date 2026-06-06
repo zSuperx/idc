@@ -3,7 +3,7 @@
 //
 // Live analysis is based off the algorithm described here:
 // https://en.wikipedia.org/wiki/Live-variable_analysis
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use crate::arch::lir::{LirType, LirVal};
 use crate::arch::x86::*;
@@ -30,7 +30,11 @@ impl Emitter {
 
     fn resolve_ptr(&self, v: LirVal, ty: LirType) -> x86Val {
         match v {
-            LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Mem(ty, Virt(id), 0)),
+            LirVal::Reg(id) => self
+                .v2h
+                .get(&v)
+                .copied()
+                .unwrap_or(Mem(ty.size(), Virt(id), 0)),
             LirVal::Imm(_) => panic!("Resolve pointer called on immediate value"),
         }
     }
@@ -65,14 +69,14 @@ impl Emitter {
                             3 => Reg(Rcx),
                             4 => Reg(R8),
                             5 => Reg(R9),
-                            _ => Mem(ty, Rbp, num.saturating_sub(6) as i128 + 8),
+                            _ => Mem(ty.size(), Rbp, num.saturating_sub(6) as i128 + 8),
                         };
                         builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2h.insert(dst, loc);
                     }
                     LirInstr::Alloc(ty, dst, name) => {
                         let size = align_n(ty.size() as i128, ty.alignment());
-                        let loc = Mem(ty, Rbp, self.v_rsp - 8);
+                        let loc = Mem(ty.size(), Rbp, self.v_rsp - 8);
                         let aligned_size = align_n(size, 16);
                         self.v_rsp -= aligned_size;
                         builder.emit(Sub(Reg(Rsp), Imm(aligned_size as i128)));
@@ -93,7 +97,7 @@ impl Emitter {
                         assert!(matches!(dst, Reg(_)));
 
                         let rs1 = match rs1 {
-                            Reg(reg) => Mem(ty, reg, 0),
+                            Reg(reg) => Mem(ty.size(), reg, 0),
                             Mem(..) => rs1,
                             Imm(_) => unreachable!(),
                         };
@@ -120,6 +124,7 @@ impl Emitter {
                     LirInstr::Br(rs1, bb1, bb2) => {
                         let rs1 = self.resolve_val(rs1);
                         builder.emit(Cmp(rs1, Imm(1)));
+                        // If we fall through to the "then" block, there's no need to emit a `jnz`
                         if bb_iter.peek().is_none_or(|next_bb| next_bb.name != bb1) {
                             builder.emit(Jnz(bb1));
                         }
@@ -166,9 +171,10 @@ impl Emitter {
                         let dst = self.resolve_val(dst);
                         let rs1 = self.resolve_val(rs1);
                         let rs2 = self.resolve_val(rs2);
-                        builder.emit(Cmp(rs1, rs2));
                         let tmp = self.resolve_val(LirVal::Reg(builder.next_reg()));
-                        builder.emit(Mov(tmp, Imm(1)));
+                        builder.emit(Mov(tmp, Imm(0)));
+                        builder.emit(Cmp(rs1, rs2));
+                        builder.emit(Mov(dst, Imm(1)));
                         let cmov_instr = match i {
                             LirInstr::Eq(..) => Cmove(dst, tmp),
                             LirInstr::Sgt(..) => Cmovg(dst, tmp),
@@ -206,82 +212,175 @@ impl Emitter {
         let exit_bb = builder.next_bb("");
         builder.start_new_block(exit_bb);
 
-        self.allocate_registers(&builder);
+        let mut p = builder.bbs.iter_mut().peekable();
+        while let Some(bb) = p.next() {
+            for i in bb.instructions.iter() {
+                match i {
+                    Jmp(tgt) | Je(tgt) | Jne(tgt) | Jl(tgt) | Jle(tgt) | Jg(tgt) | Jge(tgt)
+                    | Jo(tgt) | Jno(tgt) | Jz(tgt) | Jnz(tgt) => {
+                        bb.succ.push(*tgt);
+                        p.peek().inspect(|next| {
+                            if next.name != *tgt {
+                                bb.succ.push(next.name)
+                            }
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        self.allocate_registers(&mut builder);
 
         builder
     }
 
-    pub fn allocate_registers(&mut self, builder: &Builder<x86Instr>) -> Vec<x86Instr> {
+    pub fn allocate_registers(&mut self, builder: &mut Builder<x86Instr>) {
         let total_regs = builder.vreg_count + 16;
-
-        let out = vec![];
 
         let mut live_in = vec![BitSet::with_size(total_regs); builder.bbs.len()];
         let mut live_out = vec![BitSet::with_size(total_regs); builder.bbs.len()];
         let mut def = vec![BitSet::with_size(total_regs); builder.bbs.len()];
         let mut use_ = vec![BitSet::with_size(total_regs); builder.bbs.len()];
+        // This just maps BB -> usize, so we have reverse index from BB to its place in the builder
+        // bb list
+        let mut map_index = HashMap::new();
 
-        for (bbid, bb) in builder.bbs.iter().enumerate() {
-            for i in bb.instructions.iter() {
+        // Build the USE & DEF sets (also called GEN & KILL)
+        for (bbid, bb) in builder.bbs.iter_mut().enumerate() {
+            map_index.insert(bb.name, bbid);
+            for i in bb.instructions.iter_mut() {
                 for src in i.srcs() {
                     match *src {
-                        Reg(reg) | Mem(_, reg, _) => {
-                            if !def[bbid].contains(reg.into()) {
-                                use_[bbid].insert(reg.into());
+                        Reg(reg @ Virt(..)) | Mem(_, reg @ Virt(..), _) => {
+                            if !def[bbid].contains(reg.into_usize()) {
+                                use_[bbid].insert(reg.into_usize());
                             }
                         }
-                        Imm(_) => {}
+                        _ => {}
+                    }
+                }
+
+                for dst in i.dsts() {
+                    match *dst {
+                        Reg(reg @ Virt(..)) | Mem(_, reg @ Virt(..), _) => {
+                            def[bbid].insert(reg.into_usize());
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        // TODO: This is a suboptimal convergence algorithm to compute the LIVE_{IN,OUT} sets.
+        // It can be vastly improved by popping items out of a worklist. When a basic block sees
+        // its LIVE sets change, it should push its predecessors into_usize the worklist.
+        //
+        // The issue is that there is currently no way to find a basic block's predecessors. This is
+        // a TODO for when that API gets overhauled. For now, just loop forever until convergence.
+        loop {
+            let mut changed = false;
+
+            for bb in builder.bbs.iter().rev() {
+                let index = map_index.get(&bb.name).copied().unwrap();
+                let basicblock = &builder.bbs[index];
+
+                let live_in0 = live_in[index].clone();
+                let live_out0 = live_out[index].clone();
+
+                for succ in basicblock.succ.iter() {
+                    let succ_index = map_index.get(succ).copied().unwrap();
+                    live_out[index] = live_out[index].union(&live_in[succ_index]);
+                }
+
+                live_in[index] = use_[index].union(&live_out[index].difference(&def[index]));
+
+                if live_in0 != live_in[index] || live_out0 != live_out[index] {
+                    changed = true;
+                }
+            }
+
+            if !changed {
+                break;
+            }
+        }
+
+        let mut graph = VecVecGraph::new(builder.vreg_count + 16);
+
+        let phys = &[
+            Rdi, Rsi, Rdx, Rcx, R8, R9, Rax, R10, R11, Rsp, Rbp, Rbx, R12, R13, R14, R15,
+        ];
+
+        for bb in builder.bbs.iter_mut() {
+            let index = map_index[&bb.name];
+            let mut live = &mut live_out[index];
+
+            for i in bb.instructions.iter_mut().rev() {
+                for dst in i.dsts() {
+                    match *dst {
+                        Reg(reg) | Mem(_, reg, _) => {
+                            for v in live.iter() {
+                                let reg_num: usize = reg.into_usize();
+                                if reg_num != v {
+                                    graph.add_edge(reg_num, v);
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
 
                 for dst in i.dsts() {
                     match *dst {
                         Reg(reg) | Mem(_, reg, _) => {
-                            def[bbid].insert(reg.into());
+                            live.remove(reg.into_usize());
                         }
-                        Imm(_) => {}
+                        _ => {}
+                    }
+                }
+
+                for src in i.srcs() {
+                    match *src {
+                        Reg(reg) | Mem(_, reg, _) => {
+                            live.insert(reg.into_usize());
+                        }
+                        _ => {}
                     }
                 }
             }
         }
-        let mut worklist = vec![builder.bbs.len() - 1];
-        let mut visited = HashSet::new();
-
-        while let Some(bb_index) = worklist.pop() {
-            if !visited.insert(bb_index) {
-                continue;
-            }
-
-            let live_in0 = live_in[bb_index].clone();
-            let live_out0 = live_out[bb_index].clone();
-            // TODO: In order to proceed, we must have a way to get a particular block's successors
-            // This is in theory not difficult to do since it requires simply observing the terminal
-            // instruction and seeing where it branches. This, however, is architecture specific. A
-            // better solution would be to modify gen.py to auto-generate a 
-            //
-            // `fn targets(&self) -> Vec<BB>`
-            //
-            // that we can use before this loop (or even in the lowering phase). Part of this
-            // limitation is also because `Builder<I>` is generic over an instruction type `I`, and
-            // its API does not give a way to encode successor blocks in the lowering phase. This is
-            // another avenue that can be explored.
-
-            let tmp = BitSet::new();
-        }
-
-        let phys = &[
-            Rdi, Rsi, Rdx, Rcx, R8, R9, Rax, R10, R11, Rsp, Rbp, Rbx, R12, R13, R14, R15,
-        ];
-        let mut graph = VecVecGraph::new(builder.vreg_count + 16);
 
         for i in 0..phys.len() {
             for j in i + 1..phys.len() {
-                graph.add_edge(phys[i].into(), phys[j].into());
+                graph.add_edge(phys[i].into_usize(), phys[j].into_usize());
             }
         }
 
         let coloring = color_greedy_by_degree(&graph);
 
-        out
+        for bb in builder.bbs.iter_mut() {
+            // let new = vec![];
+            for i in bb.instructions.iter_mut() {
+                for dst in i.dsts() {
+                    match dst {
+                        Reg(reg @ Virt(..)) | Mem(_, reg @ Virt(..), _) => {
+                            let new = x86Reg::from_usize(coloring[reg.into_usize()]);
+                            *reg = new;
+                        }
+                        _ => {}
+                    }
+                }
+
+                for src in i.srcs() {
+                    match src {
+                        Reg(reg @ Virt(..)) | Mem(_, reg @ Virt(..), _) => {
+                            let new = x86Reg::from_usize(coloring[reg.into_usize()]);
+                            *reg = new;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
     }
 }
