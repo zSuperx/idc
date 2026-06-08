@@ -56,7 +56,7 @@ impl std::fmt::Display for x86Instr {
         match self {
 	    Self::Add(v0, v1) => f.write_fmt(format_args!("add {v0}, {v1}")),
 	    Self::Sub(v0, v1) => f.write_fmt(format_args!("sub {v0}, {v1}")),
-	    Self::Mul(v0, v1) => f.write_fmt(format_args!("mul {v0}, {v1}")),
+	    Self::Mul(v0, v1) => f.write_fmt(format_args!("mul {v1}")),
 	    Self::Imul(v0, v1) => f.write_fmt(format_args!("imul {v0}, {v1}")),
 	    Self::Div(v0, v1) => f.write_fmt(format_args!("div {v0}, {v1}")),
 	    Self::Idiv(v0, v1) => f.write_fmt(format_args!("idiv {v0}, {v1}")),

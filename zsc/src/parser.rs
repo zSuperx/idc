@@ -284,6 +284,10 @@ impl Compiler {
                 };
                 HirExpr::new(kind, ())
             }
+            Token::LBrack => {
+                let index = self.parse_expr();
+                todo!()
+            }
             arith @ (Token::Plus | Token::Minus | Token::Star | Token::Slash) => {
                 let rhs = self._parse_expr(op_power);
                 let op = match arith {

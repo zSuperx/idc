@@ -1,5 +1,6 @@
 use crate::{
     arch::lir::*,
+    autogen::*,
     ast::*,
     aux::{Compiler, SymbolInfo, SymbolKind},
     tir::*,
@@ -261,6 +262,7 @@ impl Compiler {
                 rs1
             }
             TirExprKind::Call { callee, args } => todo!(),
+            TirExprKind::SizeOf { rhs } => todo!(),
         }
     }
 }

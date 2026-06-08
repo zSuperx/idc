@@ -46,6 +46,17 @@ impl Emitter {
         }
     }
 
+    fn resolve_reg(&self, v: LirVal, builder: &mut Builder<x86Instr>) -> x86Val {
+        match v {
+            LirVal::Reg(id) => self.v2h.get(&v).copied().unwrap_or(Reg(Virt(id))),
+            LirVal::Imm(i) => {
+                let reg = Reg(Virt(builder.next_reg()));
+                builder.emit(Mov(reg, Imm(i)));
+                reg
+            }
+        }
+    }
+
     pub fn translate_func(&mut self, f: Builder<LirInstr>) -> Builder<x86Instr> {
         let mut builder = Builder::new(f.name, f.bb_count, f.vreg_count);
 
@@ -153,9 +164,9 @@ impl Emitter {
                         builder.emit(Imul(dst, rs2));
                     }
                     LirInstr::Umul(ty, dst, rs1, rs2) => {
-                        let dst = self.resolve_val(dst);
+                        let dst = Reg(Rax);
                         let rs1 = self.resolve_val(rs1);
-                        let rs2 = self.resolve_val(rs2);
+                        let rs2 = self.resolve_reg(rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Mul(dst, rs2));
                     }

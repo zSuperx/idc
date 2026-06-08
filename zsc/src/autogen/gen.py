@@ -10,14 +10,14 @@ class InstrInfo:
         self,
         name: str,
         fields: list[str] = [],
-        outs: list[int] = [],
-        ins: list[int] = [],
+        defs: list[int] = [],
+        uses: list[int] = [],
         is_terminator: bool = False,
         fmt: str | None = None,
     ) -> None:
         self.name = name
-        self.outs = outs
-        self.ins = ins
+        self.outs = defs
+        self.ins = uses
         self.fields = fields
         self.is_terminator = is_terminator
         self.fmt = (

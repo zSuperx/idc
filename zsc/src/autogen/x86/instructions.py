@@ -6,24 +6,24 @@ def binop(name) -> InstrInfo:
     return InstrInfo(
         name=name,
         fields=[V, V],
-        outs=[0],
-        ins=[0, 1],
+        defs=[0],
+        uses=[0, 1],
         is_terminator=False,
     )
 
 
 def jump(name) -> InstrInfo:
-    return InstrInfo(name=name, fields=["BB"], outs=[], ins=[], is_terminator=True)
+    return InstrInfo(name=name, fields=["BB"], defs=[], uses=[], is_terminator=True)
 
 
 def move(name) -> InstrInfo:
-    return InstrInfo(name=name, fields=[V, V], ins=[1], outs=[0])
+    return InstrInfo(name=name, fields=[V, V], uses=[1], defs=[0])
 
 
 INSTRUCTIONS = [
     binop("add"),
     binop("sub"),
-    binop("mul"),
+    InstrInfo("mul", [V, V], defs=[0], uses=[0, 1], fmt="mul {v1}"),
     binop("imul"),
     binop("div"),
     binop("idiv"),
@@ -44,12 +44,12 @@ INSTRUCTIONS = [
     move("cmovg"),
     move("cmovge"),
     #
-    InstrInfo("cmp", [V, V], ins=[0, 1]),
+    InstrInfo("cmp", [V, V], uses=[0, 1]),
     InstrInfo("comment", ["String"], fmt="; {v0}"),
-    InstrInfo("push", [V], outs=[], ins=[0]),
-    InstrInfo("pop", [V], outs=[0], ins=[]),
+    InstrInfo("push", [V], defs=[], uses=[0]),
+    InstrInfo("pop", [V], defs=[0], uses=[]),
     # terminators
-    InstrInfo("call", [V], ins=[0]),
+    InstrInfo("call", [V], uses=[0]),
     InstrInfo("ret", is_terminator=True),
     jmp := jump("jmp"),
     jump("je"),

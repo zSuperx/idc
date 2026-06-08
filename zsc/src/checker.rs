@@ -391,6 +391,7 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExprKind::Call { callee, args } => todo!(),
+            HirExprKind::SizeOf { rhs } => todo!(),
         };
         Spanned::new(inner, span)
     }

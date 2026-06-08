@@ -1,0 +1,11 @@
+main:
+.L0.entry:
+	param ptr, %0, argv.1, 1
+	alloc i64, %1, y.2
+	param i64, %2, argc.0, 0
+	jmp .L1.body
+.L1.body:
+	umul i64, %3, %2, 3
+	store i64, %1, %3
+	load i64, %6, %1
+	ret i64, %6
