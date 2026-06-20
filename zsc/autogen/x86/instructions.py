@@ -64,8 +64,8 @@ INSTRUCTIONS = [
     jump("jnz"),
 ]
 
-iclass = InstructionClass(
-    arch="x86",
+iclass = Arch(
+    name="x86",
     enum="x86Instr",
     val=V,
     instrs=INSTRUCTIONS,

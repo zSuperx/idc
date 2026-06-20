@@ -1,8 +1,9 @@
+
 class InstrInfo:
     name: str
     fields: list[str]
-    outs: list[int]
-    ins: list[int]
+    defs: list[str | int]
+    uses: list[str | int]
     fmt: str
     is_terminator: bool
 
@@ -10,14 +11,14 @@ class InstrInfo:
         self,
         name: str,
         fields: list[str] = [],
-        defs: list[int] = [],
-        uses: list[int] = [],
+        defs: list[str | int] = [],
+        uses: list[str | int] = [],
         is_terminator: bool = False,
         fmt: str | None = None,
     ) -> None:
         self.name = name
-        self.outs = defs
-        self.ins = uses
+        self.defs = defs
+        self.uses = uses
         self.fields = fields
         self.is_terminator = is_terminator
         self.fmt = (
@@ -26,7 +27,7 @@ class InstrInfo:
         )
 
 
-class InstructionClass:
+class Arch:
     arch_name: str
     enum_name: str
     val_name: str
@@ -35,13 +36,13 @@ class InstructionClass:
 
     def __init__(
         self,
-        arch: str,
+        name: str,
         enum: str,
         val: str,
         instrs: list[InstrInfo],
         uncond_jump: InstrInfo,
     ):
-        self.arch_name = arch
+        self.arch_name = name
         self.enum_name = enum
         self.val_name = val
         self.instrs = instrs
@@ -71,7 +72,7 @@ use crate::arch::{self.arch_name}::*;
         ret = "#[derive(Debug, Clone)]\n"
         ret += f"pub enum {self.enum_name} {{\n"
         for i in self.instrs:
-            ret += f"\t    {gen_enum_variant(i)},\n"
+            ret += f"\t\t{gen_enum_variant(i)},\n"
         ret += "}"
         return ret
 
@@ -131,7 +132,7 @@ def gen_display(instr: InstrInfo) -> str:
 def gen_arm(instr) -> str:
     inner = ", ".join(f"v{i}" for i in range(len(instr.fields)))
     params = "" if len(instr.fields) == 0 else f"({inner})"
-    return f"\t    Self::{instr.name.capitalize()}{params}"
+    return f"\t\t\t\t\t\tSelf::{instr.name.capitalize()}{params}"
 
 
 def gen_enum_variant(instr: InstrInfo) -> str:
@@ -144,10 +145,22 @@ def gen_enum_variant(instr: InstrInfo) -> str:
 
 
 def gen_srcs(instr: InstrInfo) -> str:
-    vals = ", ".join(f"v{i}" for i in instr.ins)
+    vals = []
+    for i in instr.uses:
+        if type(i) == int:
+            vals.append(f"v{i}")
+        else:
+            vals.append(i)
+    vals = ", ".join(vals)
     return f"vec![{vals}].into_iter()"
 
 
 def gen_dsts(instr: InstrInfo) -> str:
-    vals = ", ".join(f"v{i}" for i in instr.outs)
+    vals = []
+    for i in instr.defs:
+        if type(i) == int:
+            vals.append(f"v{i}")
+        else:
+            vals.append(i)
+    vals = ", ".join(vals)
     return f"vec![{vals}].into_iter()"

@@ -1,17 +1,22 @@
 #[derive(Clone, Copy, Debug)]
 pub enum x86Val {
     Imm(i128),
-    Reg(x86Reg),
-    Mem(usize, x86Reg, i128),
+    Reg(usize, usize),
+    Mem(usize, usize, i128),
 }
 
 impl std::fmt::Display for x86Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             x86Val::Imm(imm) => f.write_fmt(format_args!("{imm}")),
-            x86Val::Reg(reg) => f.write_fmt(format_args!("{reg}")),
-            x86Val::Mem(size, reg, imm) => {
-                let width_spec = match size {
+            x86Val::Reg(width, reg) => {
+                f.write_fmt(format_args!(
+                    "{}",
+                    reg_name((*reg).into(), *width)
+                ))
+            }
+            x86Val::Mem(width, reg, imm) => {
+                let width_spec = match width {
                     1 => "byte",
                     2 => "word",
                     4 => "dword",
@@ -19,93 +24,99 @@ impl std::fmt::Display for x86Val {
                     _ => unreachable!(),
                 };
                 match imm {
-                    ..0 => f.write_fmt(format_args!("{width_spec} [{reg} - {}]", imm.abs())),
-                    0 => f.write_fmt(format_args!("{width_spec} [{reg}]")),
-                    0.. => f.write_fmt(format_args!("{width_spec} [{reg} + {}]", imm.abs())),
+                    ..0 => f.write_fmt(format_args!(
+                        "{width_spec} [{} - {}]",
+                        reg_name((*reg).into(), 8),
+                        imm.abs()
+                    )),
+                    0 => f.write_fmt(format_args!(
+                        "{width_spec} [{}]",
+                        reg_name((*reg).into(), 8)
+                    )),
+                    0.. => f.write_fmt(format_args!(
+                        "{width_spec} [{} + {}]",
+                        reg_name((*reg).into(), 8),
+                        imm.abs()
+                    )),
                 }
             }
         }
     }
 }
 
-#[allow(unused)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum x86Reg {
-    Rdi, // arg 1
-    Rsi, // arg 2
-    Rdx, // arg 3
-    Rcx, // arg 4
-    R8,  // arg 5
-    R9,  // arg 6
+impl From<usize> for x86Reg {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => x86Reg::A,
+            1 => x86Reg::B,
+            2 => x86Reg::C,
+            3 => x86Reg::D,
 
-    // Temporary registers that functions may change
-    Rax, // Return value
-    R10,
-    R11,
+            4 => x86Reg::SI,
+            5 => x86Reg::DI,
+            6 => x86Reg::SP,
+            7 => x86Reg::BP,
 
-    // Callee-saved registers that will stay unchanged
-    Rsp, // Stack pointer
-    Rbp, // Frame pointer
-    Rbx, // Base pointer
-    R12,
-    R13,
-    R14,
-    R15,
-
-    Virt(usize),
-}
-
-impl x86Reg {
-    pub fn from_usize(num: usize) -> Self {
-        match num {
-            0 => x86Reg::Rdi,
-            1 => x86Reg::Rsi,
-            2 => x86Reg::Rdx,
-            3 => x86Reg::Rcx,
-            4 => x86Reg::R8,
-            5 => x86Reg::R9,
-            6 => x86Reg::Rax,
-            7 => x86Reg::R10,
-            8 => x86Reg::R11,
-            9 => x86Reg::Rsp,
-            10 => x86Reg::Rbp,
-            11 => x86Reg::Rbx,
+            8 => x86Reg::R8,
+            9 => x86Reg::R9,
+            10 => x86Reg::R10,
+            11 => x86Reg::R11,
             12 => x86Reg::R12,
             13 => x86Reg::R13,
             14 => x86Reg::R14,
             15 => x86Reg::R15,
-            x => panic!("Unmapped registers {x}"),
-        }
-    }
-
-    pub fn into_usize(self) -> usize {
-        match self {
-            x86Reg::Rdi => 0,
-            x86Reg::Rsi => 1,
-            x86Reg::Rdx => 2,
-            x86Reg::Rcx => 3,
-            x86Reg::R8 => 4,
-            x86Reg::R9 => 5,
-            x86Reg::Rax => 6,
-            x86Reg::R10 => 7,
-            x86Reg::R11 => 8,
-            x86Reg::Rsp => 9,
-            x86Reg::Rbp => 10,
-            x86Reg::Rbx => 11,
-            x86Reg::R12 => 12,
-            x86Reg::R13 => 13,
-            x86Reg::R14 => 14,
-            x86Reg::R15 => 15,
-            x86Reg::Virt(i) => i + 15,
+            _ => unreachable!(),
         }
     }
 }
 
-impl std::fmt::Display for x86Reg {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            x86Reg::Virt(reg_id) => f.write_fmt(format_args!("%{reg_id}")),
-            _ => f.write_str(&format!("{self:?}").to_ascii_lowercase()),
-        }
+fn reg_name(reg: x86Reg, width: usize) -> &'static str {
+    let names = match reg {
+        x86Reg::A => ["al", "ax", "eax", "rax"],
+        x86Reg::B => ["bl", "bx", "ebx", "rbx"],
+        x86Reg::C => ["cl", "cx", "ecx", "rcx"],
+        x86Reg::D => ["dl", "dx", "edx", "rdx"],
+        x86Reg::SI => ["sil", "si", "esi", "rsi"],
+        x86Reg::DI => ["dil", "di", "edi", "rdi"],
+        x86Reg::SP => ["spl", "sp", "esp", "rsp"],
+        x86Reg::BP => ["bpl", "bp", "ebp", "rbp"],
+        x86Reg::R8 => ["r8b", "r8w", "r8d", "r8"],
+        x86Reg::R9 => ["r9b", "r9w", "r9d", "r9"],
+        x86Reg::R10 => ["r10b", "r10w", "r10d", "r10"],
+        x86Reg::R11 => ["r11b", "r11w", "r11d", "r11"],
+        x86Reg::R12 => ["r12b", "r12w", "r12d", "r12"],
+        x86Reg::R13 => ["r13b", "r13w", "r13d", "r13"],
+        x86Reg::R14 => ["r14b", "r14w", "r14d", "r14"],
+        x86Reg::R15 => ["r15b", "r15w", "r15d", "r15"],
+    };
+    match width {
+        1 => names[0],
+        2 => names[1],
+        4 => names[2],
+        8 => names[3],
+        _ => unreachable!(),
     }
+}
+
+#[allow(unused)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum x86Reg {
+    A = 0,
+    B = 1,
+    C = 2,
+    D = 3,
+
+    SI = 4,
+    DI = 5,
+    SP = 6,
+    BP = 7,
+
+    R8 = 8,
+    R9 = 9,
+    R10 = 10,
+    R11 = 11,
+    R12 = 12,
+    R13 = 13,
+    R14 = 14,
+    R15 = 15,
 }

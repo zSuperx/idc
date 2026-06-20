@@ -5,9 +5,9 @@ fn main() {
 }
 
 fn autogen_file(arch: &str) {
-    let autogen_path = "./src/autogen/";
-    let python_path = format!("{autogen_path}/main.py");
-    let output_path = format!("{autogen_path}/{arch}/mod.rs");
+    let autogen_output_path = "./src/autogen/";
+    let python_path = format!("./autogen/main.py");
+    let output_path = format!("{autogen_output_path}/{arch}/mod.rs");
 
     let out = std::process::Command::new("python3")
         .arg(python_path)

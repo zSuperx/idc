@@ -43,6 +43,6 @@ INSTRUCTIONS = [
 ]
 
 
-iclass = InstructionClass(
-    arch="lir", enum="LirInstr", val=V, instrs=INSTRUCTIONS, uncond_jump=jmp
+iclass = Arch(
+    name="lir", enum="LirInstr", val=V, instrs=INSTRUCTIONS, uncond_jump=jmp
 )

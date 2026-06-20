@@ -203,7 +203,7 @@ impl Emitter {
 
                     LirInstr::Ret(ty, rs1) => {
                         let rs1 = self.resolve_val(rs1);
-                        builder.emit(Mov(Reg(Rax), rs1));
+                        builder.emit(Mov(Reg(ty.size(), A as usize), rs1));
                         builder.emit(Jmp(epilogue));
                     }
 

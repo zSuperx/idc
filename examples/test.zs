@@ -1,4 +1,3 @@
-fn main(argc: u64, argv: **u8) -> u64 {
-  let y = argc * 3;
-  return y;
+fn main(argc: i32, argv: **u8) -> u8 {
+  return **argv;
 }
