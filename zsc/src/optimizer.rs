@@ -28,25 +28,25 @@ impl Compiler {
     fn const_fold_bb(&mut self, bb: &mut BasicBlock<LirInstr>, map: &mut HashMap<LirVal, i128>) {
         for i in 0..bb.instructions.len() {
             match &bb.instructions[i] {
-                Copy(dst, rs1) => {
+                Copy(_, dst, rs1) => {
                     let v1 = map.get(&rs1).copied();
                     if let Some(imm) = v1 {
                         map.insert(*dst, imm);
                     }
                 }
-                op @ (Add(dst, rs1, rs2)
-                | Sub(dst, rs1, rs2)
-                | Smul(dst, rs1, rs2)
-                | Umul(dst, rs1, rs2)
-                | Sgt(dst, rs1, rs2)
-                | Sge(dst, rs1, rs2)
-                | Slt(dst, rs1, rs2)
-                | Sle(dst, rs1, rs2)
-                | Ugt(dst, rs1, rs2)
-                | Uge(dst, rs1, rs2)
-                | Ult(dst, rs1, rs2)
-                | Ule(dst, rs1, rs2)
-                | Eq(dst, rs1, rs2)) => {
+                op @ (Add(_, dst, rs1, rs2)
+                | Sub(_, dst, rs1, rs2)
+                | Smul(_, dst, rs1, rs2)
+                | Umul(_, dst, rs1, rs2)
+                | Sgt(_, dst, rs1, rs2)
+                | Sge(_, dst, rs1, rs2)
+                | Slt(_, dst, rs1, rs2)
+                | Sle(_, dst, rs1, rs2)
+                | Ugt(_, dst, rs1, rs2)
+                | Uge(_, dst, rs1, rs2)
+                | Ult(_, dst, rs1, rs2)
+                | Ule(_, dst, rs1, rs2)
+                | Eq(_, dst, rs1, rs2)) => {
                     let v1 = map.get(&rs1).copied();
                     let v2 = map.get(&rs2).copied();
 
@@ -84,23 +84,23 @@ impl Compiler {
     fn track_live_code(&mut self, bb: &BasicBlock<LirInstr>, is_read: &mut HashSet<LirVal>) {
         for instr in bb.instructions.iter() {
             match *instr {
-                Ret(rs1) | Br(rs1, ..) | Copy(_, rs1) | Load(_, rs1) => {
+                Ret(_, rs1) | Br(_, rs1, ..) | Copy(_, _, rs1) | Load(_, _, rs1) => {
                     is_read.insert(rs1);
                 }
-                Add(_, rs1, rs2)
-                | Sub(_, rs1, rs2)
-                | Smul(_, rs1, rs2)
-                | Umul(_, rs1, rs2)
-                | Eq(_, rs1, rs2)
-                | Sgt(_, rs1, rs2)
-                | Sge(_, rs1, rs2)
-                | Slt(_, rs1, rs2)
-                | Sle(_, rs1, rs2)
-                | Ugt(_, rs1, rs2)
-                | Uge(_, rs1, rs2)
-                | Ult(_, rs1, rs2)
-                | Ule(_, rs1, rs2)
-                | Store(rs1, rs2) => {
+                Add(_, _, rs1, rs2)
+                | Sub(_, _, rs1, rs2)
+                | Smul(_, _, rs1, rs2)
+                | Umul(_, _, rs1, rs2)
+                | Eq(_, _, rs1, rs2)
+                | Sgt(_, _, rs1, rs2)
+                | Sge(_, _, rs1, rs2)
+                | Slt(_, _, rs1, rs2)
+                | Sle(_, _, rs1, rs2)
+                | Ugt(_, _, rs1, rs2)
+                | Uge(_, _, rs1, rs2)
+                | Ult(_, _, rs1, rs2)
+                | Ule(_, _, rs1, rs2)
+                | Store(_, rs1, rs2) => {
                     is_read.insert(rs1);
                     is_read.insert(rs2);
                 }

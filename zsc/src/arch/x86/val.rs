@@ -40,7 +40,7 @@ impl std::fmt::Display for x86Val {
         match self.kind {
             x86ValKind::Imm(imm) => f.write_fmt(format_args!("{imm}")),
             x86ValKind::Reg(reg) => {
-                f.write_fmt(format_args!("{}", sized_reg(x86Reg::from(reg), self.size)))
+                f.write_fmt(format_args!("{}", sized_reg(reg, self.size)))
             }
             x86ValKind::Mem(reg, imm) => {
                 let width_spec = match self.size {
@@ -53,16 +53,16 @@ impl std::fmt::Display for x86Val {
                 match imm {
                     ..0 => f.write_fmt(format_args!(
                         "{width_spec} [{} - {}]",
-                        sized_reg(x86Reg::from(reg), 8),
+                        sized_reg(reg, 8),
                         imm.abs()
                     )),
                     0 => f.write_fmt(format_args!(
                         "{width_spec} [{}]",
-                        sized_reg(x86Reg::from(reg), 8)
+                        sized_reg(reg, 8)
                     )),
                     0.. => f.write_fmt(format_args!(
                         "{width_spec} [{} + {}]",
-                        sized_reg(x86Reg::from(reg), 8),
+                        sized_reg(reg, 8),
                         imm.abs()
                     )),
                 }
@@ -71,50 +71,33 @@ impl std::fmt::Display for x86Val {
     }
 }
 
-impl From<usize> for x86Reg {
-    fn from(value: usize) -> Self {
-        match value {
-            0 => x86Reg::A,
-            1 => x86Reg::B,
-            2 => x86Reg::C,
-            3 => x86Reg::D,
-
-            4 => x86Reg::SI,
-            5 => x86Reg::DI,
-            6 => x86Reg::SP,
-            7 => x86Reg::BP,
-
-            8 => x86Reg::R8,
-            9 => x86Reg::R9,
-            10 => x86Reg::R10,
-            11 => x86Reg::R11,
-            12 => x86Reg::R12,
-            13 => x86Reg::R13,
-            14 => x86Reg::R14,
-            15 => x86Reg::R15,
-            _ => unreachable!(),
-        }
-    }
-}
-
-fn sized_reg(reg: x86Reg, size: usize) -> &'static str {
+fn sized_reg(reg: usize, size: usize) -> String {
     let names = match reg {
-        x86Reg::A => ["al", "ax", "eax", "rax"],
-        x86Reg::B => ["bl", "bx", "ebx", "rbx"],
-        x86Reg::C => ["cl", "cx", "ecx", "rcx"],
-        x86Reg::D => ["dl", "dx", "edx", "rdx"],
-        x86Reg::SI => ["sil", "si", "esi", "rsi"],
-        x86Reg::DI => ["dil", "di", "edi", "rdi"],
-        x86Reg::SP => ["spl", "sp", "esp", "rsp"],
-        x86Reg::BP => ["bpl", "bp", "ebp", "rbp"],
-        x86Reg::R8 => ["r8b", "r8w", "r8d", "r8"],
-        x86Reg::R9 => ["r9b", "r9w", "r9d", "r9"],
-        x86Reg::R10 => ["r10b", "r10w", "r10d", "r10"],
-        x86Reg::R11 => ["r11b", "r11w", "r11d", "r11"],
-        x86Reg::R12 => ["r12b", "r12w", "r12d", "r12"],
-        x86Reg::R13 => ["r13b", "r13w", "r13d", "r13"],
-        x86Reg::R14 => ["r14b", "r14w", "r14d", "r14"],
-        x86Reg::R15 => ["r15b", "r15w", "r15d", "r15"],
+        A => ["al", "ax", "eax", "rax"],
+        B => ["bl", "bx", "ebx", "rbx"],
+        C => ["cl", "cx", "ecx", "rcx"],
+        D => ["dl", "dx", "edx", "rdx"],
+        SI => ["sil", "si", "esi", "rsi"],
+        DI => ["dil", "di", "edi", "rdi"],
+        SP => ["spl", "sp", "esp", "rsp"],
+        BP => ["bpl", "bp", "ebp", "rbp"],
+        R8 => ["r8b", "r8w", "r8d", "r8"],
+        R9 => ["r9b", "r9w", "r9d", "r9"],
+        R10 => ["r10b", "r10w", "r10d", "r10"],
+        R11 => ["r11b", "r11w", "r11d", "r11"],
+        R12 => ["r12b", "r12w", "r12d", "r12"],
+        R13 => ["r13b", "r13w", "r13d", "r13"],
+        R14 => ["r14b", "r14w", "r14d", "r14"],
+        R15 => ["r15b", "r15w", "r15d", "r15"],
+        virt => {
+            return match size {
+                1 => format!("%{virt}b"),
+                2 => format!("%{virt}w"),
+                4 => format!("%{virt}d"),
+                8 => format!("%{virt}q"),
+                _ => unreachable!(),
+            };
+        }
     };
     match size {
         1 => names[0],
@@ -123,27 +106,24 @@ fn sized_reg(reg: x86Reg, size: usize) -> &'static str {
         8 => names[3],
         _ => unreachable!(),
     }
+    .to_string()
 }
 
-#[allow(unused)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum x86Reg {
-    A = 0,
-    B = 1,
-    C = 2,
-    D = 3,
+pub const A: usize = 0;
+pub const B: usize = 1;
+pub const C: usize = 2;
+pub const D: usize = 3;
 
-    SI = 4,
-    DI = 5,
-    SP = 6,
-    BP = 7,
+pub const SI: usize = 4;
+pub const DI: usize = 5;
+pub const SP: usize = 6;
+pub const BP: usize = 7;
 
-    R8 = 8,
-    R9 = 9,
-    R10 = 10,
-    R11 = 11,
-    R12 = 12,
-    R13 = 13,
-    R14 = 14,
-    R15 = 15,
-}
+pub const R8: usize = 8;
+pub const R9: usize = 9;
+pub const R10: usize = 10;
+pub const R11: usize = 11;
+pub const R12: usize = 12;
+pub const R13: usize = 13;
+pub const R14: usize = 14;
+pub const R15: usize = 15;

@@ -33,17 +33,17 @@ impl Compiler {
                     // TODO: alloc params and locals
                     match kind {
                         SymbolKind::Local => {
-                            let dst = LirVal::ptr(builder.next_reg(), 0, ty.lookup().size());
-                            builder.emit(Alloc(dst, name));
+                            let dst = LirVal::ptr(builder.next_reg(), ty.lookup().size());
+                            builder.emit(Alloc(LirType::Ptr, dst, name));
                             self.func.var2val.insert(name, dst);
                         }
                         SymbolKind::Param(num) => {
                             let dst = LirVal::reg(builder.next_reg(), ty.lookup().size());
-                            builder.emit(Param(dst, name, num));
+                            builder.emit(Param(ty.into(), dst, name, num));
                             if address_taken {
-                                let new_dst = LirVal::ptr(builder.next_reg(), 0, ty.lookup().size());
-                                builder.emit(Alloc(new_dst, name));
-                                builder.emit(Store(new_dst, dst));
+                                let new_dst = LirVal::ptr(builder.next_reg(), ty.lookup().size());
+                                builder.emit(Alloc(LirType::Ptr, new_dst, name));
+                                builder.emit(Store(ty.into(), new_dst, dst));
                                 self.func.var2val.insert(name, new_dst);
                             } else {
                                 self.func.var2val.insert(name, dst);
@@ -75,7 +75,7 @@ impl Compiler {
                 // instruction
                 for bb in builder.bbs.iter_mut() {
                     match &bb.terminator {
-                        Br(lir_val, tgt1, tgt2) => bb.succ.extend_from_slice(&[*tgt1, *tgt2]),
+                        Br(ty, lir_val, tgt1, tgt2) => bb.succ.extend_from_slice(&[*tgt1, *tgt2]),
                         Jmp(tgt) => bb.succ.push(*tgt),
                         Retv => {}
                         Ret(..) => {}
@@ -96,8 +96,9 @@ impl Compiler {
                 let LirValKind::Mem(..) = rs1.kind else {
                     panic!("Local variable must be an alloca'd pointer");
                 };
+                let ty = rhs.inner.meta.into();
                 let rs2 = self.lower_expr(builder, rhs);
-                builder.emit(Store(rs1, rs2));
+                builder.emit(Store(ty, rs1, rs2));
             }
             TirStmtKind::While { cond, body } => todo!(),
             TirStmtKind::Continue => todo!(),
@@ -112,7 +113,7 @@ impl Compiler {
                 // IF BB
                 builder.start_new_block(if_bb);
                 let cond_val = self.lower_expr(builder, cond);
-                let branch = Br(cond_val, then_bb, else_bb);
+                let branch = Br(LirType::I8, cond_val, then_bb, else_bb);
                 builder.emit(branch);
 
                 // THEN BB
@@ -139,8 +140,9 @@ impl Compiler {
                 if *spanned.inner.meta.lookup() == TirType::Void {
                     builder.emit(Retv);
                 } else {
+                    let ty: LirType = spanned.inner.meta.into();
                     let rs1 = self.lower_expr(builder, spanned);
-                    builder.emit(Ret(rs1));
+                    builder.emit(Ret(ty, rs1));
                 }
             }
             TirStmtKind::Block(spanneds) => {
@@ -155,7 +157,8 @@ impl Compiler {
     }
 
     fn lower_expr(&mut self, builder: &mut Builder<LirInstr>, expr: Spanned<TirExpr>) -> LirVal {
-        let size = expr.inner.meta.lookup().size();
+        let ty: LirType = expr.inner.meta.into();
+        let size = ty.size();
         let dst = LirVal::reg(builder.next_reg(), size);
         match expr.inner.kind {
             TirExprKind::Void => dst,
@@ -170,7 +173,7 @@ impl Compiler {
                 };
                 match rs1.kind {
                     LirValKind::Mem(..) => {
-                        builder.emit(Load(dst, rs1));
+                        builder.emit(Load(ty, dst, rs1));
                         dst
                     }
                     _ => rs1,
@@ -181,7 +184,7 @@ impl Compiler {
                 match op {
                     UnOp::Not => todo!(),
                     UnOp::Neg => {
-                        builder.emit(Smul(dst, rs1, LirVal::imm(-1, size)));
+                        builder.emit(Smul(ty, dst, rs1, LirVal::imm(-1, size)));
                     }
                 }
                 dst
@@ -191,21 +194,21 @@ impl Compiler {
                 let rs1 = self.lower_expr(builder, *lhs);
                 let rs2 = self.lower_expr(builder, *rhs);
                 let instr = match (op, is_signed) {
-                    (BinOp::Add, _) => Add(dst, rs1, rs2),
-                    (BinOp::Sub, _) => Sub(dst, rs1, rs2),
-                    (BinOp::Mul, true) => Smul(dst, rs1, rs2),
-                    (BinOp::Mul, false) => Umul(dst, rs1, rs2),
+                    (BinOp::Add, _) => Add(ty, dst, rs1, rs2),
+                    (BinOp::Sub, _) => Sub(ty, dst, rs1, rs2),
+                    (BinOp::Mul, true) => Smul(ty, dst, rs1, rs2),
+                    (BinOp::Mul, false) => Umul(ty, dst, rs1, rs2),
                     (BinOp::Div, true) => todo!(),
                     (BinOp::Div, false) => todo!(),
-                    (BinOp::Eq, _) => Eq(dst, rs1, rs2),
-                    (BinOp::Le, true) => Sle(dst, rs1, rs2),
-                    (BinOp::Le, false) => Ule(dst, rs1, rs2),
-                    (BinOp::Lt, true) => Slt(dst, rs1, rs2),
-                    (BinOp::Lt, false) => Ult(dst, rs1, rs2),
-                    (BinOp::Ge, true) => Sge(dst, rs1, rs2),
-                    (BinOp::Ge, false) => Uge(dst, rs1, rs2),
-                    (BinOp::Gt, true) => Sgt(dst, rs1, rs2),
-                    (BinOp::Gt, false) => Ugt(dst, rs1, rs2),
+                    (BinOp::Eq, _) => Eq(ty, dst, rs1, rs2),
+                    (BinOp::Le, true) => Sle(ty, dst, rs1, rs2),
+                    (BinOp::Le, false) => Ule(ty, dst, rs1, rs2),
+                    (BinOp::Lt, true) => Slt(ty, dst, rs1, rs2),
+                    (BinOp::Lt, false) => Ult(ty, dst, rs1, rs2),
+                    (BinOp::Ge, true) => Sge(ty, dst, rs1, rs2),
+                    (BinOp::Ge, false) => Uge(ty, dst, rs1, rs2),
+                    (BinOp::Gt, true) => Sgt(ty, dst, rs1, rs2),
+                    (BinOp::Gt, false) => Ugt(ty, dst, rs1, rs2),
                 };
                 builder.emit(instr);
                 dst
@@ -218,10 +221,10 @@ impl Compiler {
                     let rs2 = self.lower_expr(builder, *rhs);
                     match rs1.kind {
                         LirValKind::Mem(..) => {
-                            builder.emit(Store(rs1, rs2));
+                            builder.emit(Store(ty, rs1, rs2));
                         }
                         _ => {
-                            builder.emit(Copy(rs1, rs2));
+                            builder.emit(Copy(ty, rs1, rs2));
                         }
                     }
                     rs2
@@ -229,14 +232,14 @@ impl Compiler {
                 ExprKind::Deref { rhs: store_target } => {
                     let rs1 = self.lower_expr(builder, *store_target);
                     let rs2 = self.lower_expr(builder, *rhs);
-                    builder.emit(Store(rs1, rs2));
+                    builder.emit(Store(ty, rs1, rs2));
                     rs1
                 }
                 _ => unreachable!(),
             },
             TirExprKind::Deref { rhs } => {
                 let rs1 = self.lower_expr(builder, *rhs);
-                builder.emit(Load(dst, rs1));
+                builder.emit(Load(ty, dst, rs1));
                 dst
             }
             // AddrOf is a meta-instruction. It doesn't actually produce any "work" per-se.

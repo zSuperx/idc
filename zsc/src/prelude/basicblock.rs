@@ -39,7 +39,7 @@ impl<I: Display> std::fmt::Display for BasicBlock<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}:\n", self.name))?;
         for i in self.instructions.iter() {
-            f.write_fmt(format_args!("\t{i}\n"))?;
+            f.write_fmt(format_args!("    {i}\n"))?;
         }
         Ok(())
     }

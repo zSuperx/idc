@@ -5,21 +5,20 @@
 // https://en.wikipedia.org/wiki/Live-variable_analysis
 use std::collections::HashMap;
 
-use crate::arch::lir::{LirVal, LirValKind};
+use crate::arch::lir::{LirType, LirVal, LirValKind};
 use crate::arch::x86::*;
 use crate::autogen::LirInstr;
 use crate::autogen::x86Instr;
-use crate::prelude::*;
+use crate::{CFG, prelude::*};
 
 use bitset::BitSet;
 use heuristic_graph_coloring::{VecVecGraph, color_greedy_by_degree};
 use x86Instr::*;
-use x86Reg::*;
 use x86ValKind::*;
 
-const RBP: x86Val = x86Val::reg(BP as usize, 8);
-const RSP: x86Val = x86Val::reg(SP as usize, 8);
-const RAX: x86Val = x86Val::reg(A as usize, 8);
+const RBP: x86Val = x86Val::reg(BP, 8);
+const RSP: x86Val = x86Val::reg(SP, 8);
+const RAX: x86Val = x86Val::reg(A, 8);
 
 #[derive(Default)]
 pub struct Emitter {
@@ -32,10 +31,14 @@ impl Emitter {
         Self::default()
     }
 
-    fn resolve_ptr(&self, v: LirVal) -> x86Val {
+    fn resolve_ptr(&self, ty: LirType, v: LirVal) -> x86Val {
         match v.kind {
-            LirValKind::Reg(_) => panic!("Resolve pointer called on raw register"),
-            LirValKind::Mem(reg, _) => self
+            LirValKind::Reg(id) => self
+                .v2p
+                .get(&v)
+                .copied()
+                .unwrap_or(x86Val::mem(id + 16, 0, ty.size())),
+            LirValKind::Mem(reg) => self
                 .v2p
                 .get(&v)
                 .copied()
@@ -45,12 +48,11 @@ impl Emitter {
         }
     }
 
-    fn resolve_val(&self, v: LirVal, builder: &mut Builder<x86Instr>) -> x86Val {
+    fn resolve_val(&self, ty: LirType, v: LirVal, builder: &mut Builder<x86Instr>) -> x86Val {
         match v.kind {
-            LirValKind::Reg(id) => self.v2p.get(&v).copied().expect("Hello"),
-            // unwrap_or(x86Val::reg(id, v.size)),
+            LirValKind::Reg(id) => self.v2p.get(&v).copied().unwrap_or(x86Val::reg(id + 16, v.size)),
             LirValKind::Mem(..) => {
-                let ptr = self.resolve_ptr(v);
+                let ptr = self.resolve_ptr(ty, v);
                 let reg = x86Val::reg(builder.next_reg(), 8);
                 builder.emit(Lea(reg, ptr));
                 reg
@@ -60,7 +62,7 @@ impl Emitter {
     }
 
     pub fn translate_func(&mut self, f: Builder<LirInstr>) -> Builder<x86Instr> {
-        let mut builder = Builder::new(f.name, f.bb_count, f.vreg_count);
+        let mut builder = Builder::new(f.name, f.bb_count, f.vreg_count + 16);
 
         let prologue = builder.next_bb("prologue");
         builder.start_new_block(prologue);
@@ -73,48 +75,51 @@ impl Emitter {
         while let Some(bb) = bb_iter.next() {
             builder.start_new_block(bb.name);
             for i in bb.instructions.iter() {
+                if CFG.verbose {
+                    builder.emit(Comment(format!("{i}")));
+                }
                 match *i {
-                    LirInstr::Param(dst, name, num) => {
+                    LirInstr::Param(ty, dst, name, num) => {
                         let loc = match num {
-                            0 => x86Val::reg(DI as usize, dst.size),
-                            1 => x86Val::reg(SI as usize, dst.size),
-                            2 => x86Val::reg(D as usize, dst.size),
-                            3 => x86Val::reg(C as usize, dst.size),
-                            4 => x86Val::reg(R8 as usize, dst.size),
-                            5 => x86Val::reg(R9 as usize, dst.size),
+                            0 => x86Val::reg(DI, ty.size()),
+                            1 => x86Val::reg(SI, ty.size()),
+                            2 => x86Val::reg(D, ty.size()),
+                            3 => x86Val::reg(C, ty.size()),
+                            4 => x86Val::reg(R8, ty.size()),
+                            5 => x86Val::reg(R9, ty.size()),
                             _ => x86Val::mem(
-                                BP as usize,
+                                BP,
                                 num.saturating_sub(6) as i128 + 8,
-                                dst.size,
+                                ty.size(),
                             ),
                         };
                         builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2p.insert(dst, loc);
                     }
-                    LirInstr::Alloc(dst, name) => {
-                        let loc = x86Val::mem(BP as usize, self.v_rsp - 8, dst.size);
+                    LirInstr::Alloc(ty, dst, name) => {
+                        let loc = x86Val::mem(BP, self.v_rsp - 8, ty.size());
                         // TODO: alignment correction should be done after an "sroa" pass i think
-                        let aligned_size = align_n(dst.size as i128, 16);
+                        let aligned_size = align_n(ty.size() as i128, 16);
                         self.v_rsp -= aligned_size;
                         builder.emit(Sub(RSP, x86Val::imm(aligned_size as i128, 8)));
                         builder.emit(Comment(format!("{dst} -> {loc}")));
                         self.v2p.insert(dst, loc);
                     }
-                    LirInstr::Copy(dst, rs1) => {
-                        let dst = self.resolve_val(dst, &mut builder);
-                        let rs1 = self.resolve_val(rs1, &mut builder);
+                    LirInstr::Copy(ty, dst, rs1) => {
+                        let dst = self.resolve_val(ty, dst, &mut builder);
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
                         builder.emit(Mov(dst, rs1))
                     }
                     // mov ..., [rs1]
-                    LirInstr::Load(dst, rs1) => {
-                        let dst = self.resolve_val(dst, &mut builder);
-                        let rs1 = self.resolve_ptr(rs1);
+                    LirInstr::Load(ty, dst, rs1) => {
+                        let dst = self.resolve_val(ty, dst, &mut builder);
+                        let rs1 = self.resolve_ptr(ty, rs1);
 
                         // I actually don't know if this will always be true
                         assert!(matches!(dst.kind, Reg(..)));
 
                         let rs1 = match rs1.kind {
-                            Reg(reg) => x86Val::mem(reg, 0, rs1.size),
+                            Reg(reg) => x86Val::mem(reg, 0, ty.size()),
                             Mem(..) => rs1,
                             Imm(_) => unreachable!(),
                         };
@@ -122,26 +127,28 @@ impl Emitter {
                         builder.emit(Mov(dst, rs1));
                     }
                     // lea [rs1], rs2
-                    LirInstr::Store(rs1, rs2) => {
-                        let rs1 = self.resolve_ptr(rs1);
-                        let rs2 = self.resolve_val(rs2, &mut builder);
+                    LirInstr::Store(ty, rs1, rs2) => {
+                        let rs1 = self.resolve_ptr(ty, rs1);
+                        let rs2 = self.resolve_val(ty, rs2, &mut builder);
 
                         // I actually don't know if this will always be true
                         assert!(matches!(rs1.kind, Mem(..)));
 
                         match rs2.kind {
                             Mem(..) => {
-                                let tmp =
-                                    self.resolve_val(LirVal::reg(builder.next_reg(), rs2.size), &mut builder);
+                                let tmp = self.resolve_val(ty, 
+                                    LirVal::reg(builder.next_reg(), ty.size()),
+                                    &mut builder,
+                                );
                                 builder.emit(Lea(tmp, rs2));
                                 builder.emit(Mov(rs1, tmp));
                             }
                             _ => builder.emit(Mov(rs1, rs2)),
                         }
                     }
-                    LirInstr::Br(rs1, bb1, bb2) => {
-                        let rs1 = self.resolve_val(rs1, &mut builder);
-                        builder.emit(Cmp(rs1, x86Val::imm(1, rs1.size)));
+                    LirInstr::Br(ty, rs1, bb1, bb2) => {
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
+                        builder.emit(Cmp(rs1, x86Val::imm(1, ty.size())));
                         // If we fall through to the "then" block, there's no need to emit a `jnz`
                         if bb_iter.peek().is_none_or(|next_bb| next_bb.name != bb1) {
                             builder.emit(Jnz(bb1));
@@ -149,79 +156,78 @@ impl Emitter {
                         builder.emit(Jz(bb2));
                     }
                     LirInstr::Jmp(bb) => builder.emit(Jmp(bb)),
-                    LirInstr::Add(dst, rs1, rs2) => {
-                        let dst = self.resolve_val(dst, &mut builder);
-                        let rs1 = self.resolve_val(rs1, &mut builder);
-                        let rs2 = self.resolve_val(rs2, &mut builder);
+                    LirInstr::Add(ty, dst, rs1, rs2) => {
+                        let dst = self.resolve_val(ty, dst, &mut builder);
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
+                        let rs2 = self.resolve_val(ty, rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Add(dst, rs2));
                     }
-                    LirInstr::Sub(dst, rs1, rs2) => {
-                        let dst = self.resolve_val(dst, &mut builder);
-                        let rs1 = self.resolve_val(rs1, &mut builder);
-                        let rs2 = self.resolve_val(rs2, &mut builder);
+                    LirInstr::Sub(ty, dst, rs1, rs2) => {
+                        let dst = self.resolve_val(ty, dst, &mut builder);
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
+                        let rs2 = self.resolve_val(ty, rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Sub(dst, rs2));
                     }
-                    LirInstr::Smul(dst, rs1, rs2) => {
-                        let dst = self.resolve_val(dst, &mut builder);
-                        let rs1 = self.resolve_val(rs1, &mut builder);
-                        let rs2 = self.resolve_val(rs2, &mut builder);
+                    LirInstr::Smul(ty, dst, rs1, rs2) => {
+                        let dst = self.resolve_val(ty, dst, &mut builder);
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
+                        let rs2 = self.resolve_val(ty, rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Imul(dst, rs2));
                     }
-                    LirInstr::Umul(dst, rs1, rs2) => {
+                    LirInstr::Umul(ty, dst, rs1, rs2) => {
                         // let dst = RAX;
-                        // let rs1 = self.resolve_val(rs1, &mut builder);
+                        // let rs1 = self.resolve_val(ty, rs1, &mut builder);
                         // let rs2 = self.resolve_reg(rs2, &mut builder);
                         // builder.emit(Mov(dst, rs1));
                         // builder.emit(Mul(dst, rs2));
                         todo!("Implement unsigned multiply (mul)");
                     }
-                    LirInstr::Eq(dst, rs1, rs2)
-                    | LirInstr::Sgt(dst, rs1, rs2)
-                    | LirInstr::Sge(dst, rs1, rs2)
-                    | LirInstr::Slt(dst, rs1, rs2)
-                    | LirInstr::Sle(dst, rs1, rs2)
-                    | LirInstr::Ugt(dst, rs1, rs2)
-                    | LirInstr::Uge(dst, rs1, rs2)
-                    | LirInstr::Ult(dst, rs1, rs2)
-                    | LirInstr::Ule(dst, rs1, rs2) => {
-                        let dst = self.resolve_val(dst, &mut builder);
-                        let rs1 = self.resolve_val(rs1, &mut builder);
-                        let rs2 = self.resolve_val(rs2, &mut builder);
-                        let tmp = self.resolve_val(LirVal::reg(builder.next_reg(), dst.size), &mut builder);
-                        builder.emit(Mov(tmp, x86Val::imm(0, tmp.size)));
+                    LirInstr::Eq(ty, dst, rs1, rs2)
+                    | LirInstr::Sgt(ty, dst, rs1, rs2)
+                    | LirInstr::Sge(ty, dst, rs1, rs2)
+                    | LirInstr::Slt(ty, dst, rs1, rs2)
+                    | LirInstr::Sle(ty, dst, rs1, rs2)
+                    | LirInstr::Ugt(ty, dst, rs1, rs2)
+                    | LirInstr::Uge(ty, dst, rs1, rs2)
+                    | LirInstr::Ult(ty, dst, rs1, rs2)
+                    | LirInstr::Ule(ty, dst, rs1, rs2) => {
+                        let dst = self.resolve_val(ty, dst, &mut builder);
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
+                        let rs2 = self.resolve_val(ty, rs2, &mut builder);
+                        let tmp = self
+                            .resolve_val(ty, LirVal::reg(builder.next_reg(), ty.size()), &mut builder);
+                        builder.emit(Mov(tmp, x86Val::imm(0, ty.size())));
                         builder.emit(Cmp(rs1, rs2));
-                        builder.emit(Mov(dst, x86Val::imm(1, tmp.size)));
+                        builder.emit(Mov(dst, x86Val::imm(1, ty.size())));
                         let cmov_instr = match i {
-                            LirInstr::Eq(..) => Cmove(dst, tmp),
-                            LirInstr::Sgt(..) => Cmovg(dst, tmp),
-                            LirInstr::Sge(..) => Cmovge(dst, tmp),
-                            LirInstr::Slt(..) => Cmovl(dst, tmp),
-                            LirInstr::Sle(..) => Cmovle(dst, tmp),
-                            LirInstr::Ugt(..) => Cmovg(dst, tmp),
-                            LirInstr::Uge(..) => Cmovge(dst, tmp),
-                            LirInstr::Ult(..) => Cmovl(dst, tmp),
-                            LirInstr::Ule(..) => Cmovle(dst, tmp),
+                            LirInstr::Eq(ty, ..) => Cmove(dst, tmp),
+                            LirInstr::Sgt(ty, ..) => Cmovg(dst, tmp),
+                            LirInstr::Sge(ty, ..) => Cmovge(dst, tmp),
+                            LirInstr::Slt(ty, ..) => Cmovl(dst, tmp),
+                            LirInstr::Sle(ty, ..) => Cmovle(dst, tmp),
+                            LirInstr::Ugt(ty, ..) => Cmovg(dst, tmp),
+                            LirInstr::Uge(ty, ..) => Cmovge(dst, tmp),
+                            LirInstr::Ult(ty, ..) => Cmovl(dst, tmp),
+                            LirInstr::Ule(ty, ..) => Cmovle(dst, tmp),
                             _ => unreachable!(),
                         };
                         builder.emit(cmov_instr);
                     }
 
-                    LirInstr::Ret(rs1) => {
-                        println!("ret {rs1}");
-                        let rs1 = self.resolve_val(rs1, &mut builder);
-                        println!("Becomes ret {rs1}");
-                        builder.emit(Mov(x86Val::reg(A as usize, rs1.size), rs1));
+                    LirInstr::Ret(ty, rs1) => {
+                        let rs1 = self.resolve_val(ty, rs1, &mut builder);
+                        builder.emit(Mov(x86Val::reg(A, ty.size()), rs1));
                         builder.emit(Jmp(epilogue));
                     }
 
                     LirInstr::Retv => {
                         builder.emit(Jmp(epilogue));
                     }
-                    LirInstr::Udiv(lir_val, lir_val1, lir_val2) => todo!(),
-                    LirInstr::Sdiv(lir_val, lir_val1, lir_val2) => todo!(),
+                    LirInstr::Udiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
+                    LirInstr::Sdiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
                 }
             }
         }
@@ -251,7 +257,9 @@ impl Emitter {
             }
         }
 
-        self.allocate_registers(&mut builder);
+        if CFG.do_reg_alloc {
+            self.allocate_registers(&mut builder);
+        }
 
         builder
     }

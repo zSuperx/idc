@@ -17,9 +17,9 @@ impl LirVal {
         }
     }
 
-    pub fn ptr(reg: usize, offset: i128, size: usize) -> Self {
+    pub fn ptr(reg: usize, size: usize) -> Self {
         LirVal {
-            kind: LirValKind::Mem(reg, offset),
+            kind: LirValKind::Mem(reg),
             size,
         }
     }
@@ -42,7 +42,7 @@ impl std::fmt::Display for LirVal {
 pub enum LirValKind {
     Reg(usize),
     Imm(i128),
-    Mem(usize, i128),
+    Mem(usize),
 }
 
 impl std::fmt::Display for LirValKind {
@@ -50,7 +50,7 @@ impl std::fmt::Display for LirValKind {
         match self {
             LirValKind::Reg(r) => f.write_fmt(format_args!("%{r}")),
             LirValKind::Imm(i) => f.write_fmt(format_args!("{i}")),
-            LirValKind::Mem(r, o) => f.write_fmt(format_args!("{o}(%{r})")),
+            LirValKind::Mem(r) => f.write_fmt(format_args!("ptr %{r}")),
         }
     }
 }
