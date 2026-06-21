@@ -1,7 +1,7 @@
 use crate::{
     arch::lir::*,
-    autogen::*,
     ast::*,
+    autogen::*,
     aux::{Compiler, SymbolInfo, SymbolKind},
     tir::*,
 };
@@ -30,24 +30,23 @@ impl Compiler {
                         kind,
                         address_taken,
                     } = *info;
-                    let ty = ty.into();
                     // TODO: alloc params and locals
                     match kind {
                         SymbolKind::Local => {
-                            let dst = LirVal::Reg(builder.next_reg());
-                            builder.emit(Alloc(ty, dst, name));
-                            self.func.var2val.insert(name, VVal::Ptr(dst));
+                            let dst = LirVal::ptr(builder.next_reg(), 0, ty.lookup().size());
+                            builder.emit(Alloc(dst, name));
+                            self.func.var2val.insert(name, dst);
                         }
                         SymbolKind::Param(num) => {
-                            let dst = LirVal::Reg(builder.next_reg());
-                            builder.emit(Param(ty, dst, name, num));
+                            let dst = LirVal::reg(builder.next_reg(), ty.lookup().size());
+                            builder.emit(Param(dst, name, num));
                             if address_taken {
-                                let new_dst = LirVal::Reg(builder.next_reg());
-                                builder.emit(Alloc(ty, new_dst, name));
-                                builder.emit(Store(ty, new_dst, dst));
-                                self.func.var2val.insert(name, VVal::Ptr(new_dst));
+                                let new_dst = LirVal::ptr(builder.next_reg(), 0, ty.lookup().size());
+                                builder.emit(Alloc(new_dst, name));
+                                builder.emit(Store(new_dst, dst));
+                                self.func.var2val.insert(name, new_dst);
                             } else {
-                                self.func.var2val.insert(name, VVal::Reg(dst));
+                                self.func.var2val.insert(name, dst);
                             }
                         }
                         SymbolKind::Global => todo!(),
@@ -92,19 +91,19 @@ impl Compiler {
 
     fn lower_stmt(&mut self, builder: &mut Builder<LirInstr>, stmt: Spanned<TirStmt>) {
         match stmt.inner.kind {
-            TirStmtKind::Let { lhs, ty, rhs } => {
-                let VVal::Ptr(rs1) = self.func.var2val.get(&lhs.inner).copied().unwrap() else {
+            TirStmtKind::Let { ty, lhs, rhs } => {
+                let rs1 = self.func.var2val.get(&lhs.inner).copied().unwrap();
+                let LirValKind::Mem(..) = rs1.kind else {
                     panic!("Local variable must be an alloca'd pointer");
                 };
-                let ty = rhs.inner.meta.into();
                 let rs2 = self.lower_expr(builder, rhs);
-                builder.emit(Store(ty, rs1, rs2));
+                builder.emit(Store(rs1, rs2));
             }
             TirStmtKind::While { cond, body } => todo!(),
             TirStmtKind::Continue => todo!(),
             TirStmtKind::Break => todo!(),
             TirStmtKind::If { cond, then_, else_ } => {
-                // PREVIOUS BB
+                // Create labels
                 let if_bb = builder.next_bb("if");
                 let then_bb = builder.next_bb("then");
                 let else_bb = builder.next_bb("else");
@@ -140,9 +139,8 @@ impl Compiler {
                 if *spanned.inner.meta.lookup() == TirType::Void {
                     builder.emit(Retv);
                 } else {
-                    let ty = spanned.inner.meta.into();
                     let rs1 = self.lower_expr(builder, spanned);
-                    builder.emit(Ret(ty, rs1));
+                    builder.emit(Ret(rs1));
                 }
             }
             TirStmtKind::Block(spanneds) => {
@@ -157,93 +155,88 @@ impl Compiler {
     }
 
     fn lower_expr(&mut self, builder: &mut Builder<LirInstr>, expr: Spanned<TirExpr>) -> LirVal {
-        let dst = LirVal::Reg(builder.next_reg());
+        let size = expr.inner.meta.lookup().size();
+        let dst = LirVal::reg(builder.next_reg(), size);
         match expr.inner.kind {
             TirExprKind::Void => dst,
-            TirExprKind::Num(imm) => LirVal::Imm(imm),
+            TirExprKind::Num(imm) => LirVal::imm(imm, size),
             TirExprKind::Bool(b) => {
                 let imm = b as i128;
-                LirVal::Imm(imm)
+                LirVal::imm(imm, size)
             }
             TirExprKind::Ident(varname) => {
-                let ty = expr.inner.meta.into();
-                let Some(val) = self.func.var2val.get(&varname).copied() else {
+                let Some(rs1) = self.func.var2val.get(&varname).copied() else {
                     panic!("Undefined variable: {varname}");
                 };
-                match val {
-                    VVal::Ptr(rs1) => {
-                        builder.emit(Load(ty, dst, rs1));
+                match rs1.kind {
+                    LirValKind::Mem(..) => {
+                        builder.emit(Load(dst, rs1));
                         dst
                     }
-                    VVal::Reg(rs1) => rs1,
+                    _ => rs1,
                 }
             }
             TirExprKind::Un { op, rhs } => {
-                let ty = expr.inner.meta.into();
                 let rs1 = self.lower_expr(builder, *rhs);
                 match op {
                     UnOp::Not => todo!(),
                     UnOp::Neg => {
-                        builder.emit(Smul(ty, dst, rs1, LirVal::Imm(-1)));
+                        builder.emit(Smul(dst, rs1, LirVal::imm(-1, size)));
                     }
                 }
                 dst
             }
             TirExprKind::Bin { op, lhs, rhs } => {
-                let ty = lhs.inner.meta.into();
                 let is_signed = lhs.inner.meta.lookup().is_signed();
                 let rs1 = self.lower_expr(builder, *lhs);
                 let rs2 = self.lower_expr(builder, *rhs);
                 let instr = match (op, is_signed) {
-                    (BinOp::Add, _) => Add(ty, dst, rs1, rs2),
-                    (BinOp::Sub, _) => Sub(ty, dst, rs1, rs2),
-                    (BinOp::Mul, true) => Smul(ty, dst, rs1, rs2),
-                    (BinOp::Mul, false) => Umul(ty, dst, rs1, rs2),
+                    (BinOp::Add, _) => Add(dst, rs1, rs2),
+                    (BinOp::Sub, _) => Sub(dst, rs1, rs2),
+                    (BinOp::Mul, true) => Smul(dst, rs1, rs2),
+                    (BinOp::Mul, false) => Umul(dst, rs1, rs2),
                     (BinOp::Div, true) => todo!(),
                     (BinOp::Div, false) => todo!(),
-                    (BinOp::Eq, _) => Eq(ty, dst, rs1, rs2),
-                    (BinOp::Le, true) => Sle(ty, dst, rs1, rs2),
-                    (BinOp::Le, false) => Ule(ty, dst, rs1, rs2),
-                    (BinOp::Lt, true) => Slt(ty, dst, rs1, rs2),
-                    (BinOp::Lt, false) => Ult(ty, dst, rs1, rs2),
-                    (BinOp::Ge, true) => Sge(ty, dst, rs1, rs2),
-                    (BinOp::Ge, false) => Uge(ty, dst, rs1, rs2),
-                    (BinOp::Gt, true) => Sgt(ty, dst, rs1, rs2),
-                    (BinOp::Gt, false) => Ugt(ty, dst, rs1, rs2),
+                    (BinOp::Eq, _) => Eq(dst, rs1, rs2),
+                    (BinOp::Le, true) => Sle(dst, rs1, rs2),
+                    (BinOp::Le, false) => Ule(dst, rs1, rs2),
+                    (BinOp::Lt, true) => Slt(dst, rs1, rs2),
+                    (BinOp::Lt, false) => Ult(dst, rs1, rs2),
+                    (BinOp::Ge, true) => Sge(dst, rs1, rs2),
+                    (BinOp::Ge, false) => Uge(dst, rs1, rs2),
+                    (BinOp::Gt, true) => Sgt(dst, rs1, rs2),
+                    (BinOp::Gt, false) => Ugt(dst, rs1, rs2),
                 };
                 builder.emit(instr);
                 dst
             }
             TirExprKind::Assign { lhs, rhs } => match lhs.inner.kind {
                 ExprKind::Ident(varname) => {
-                    let Some(val) = self.func.var2val.get(&varname).copied() else {
+                    let Some(rs1) = self.func.var2val.get(&varname).copied() else {
                         panic!("Lvar not found: {varname}");
                     };
-                    let ty = rhs.inner.meta.into();
                     let rs2 = self.lower_expr(builder, *rhs);
-                    match val {
-                        VVal::Ptr(rs1) => {
-                            builder.emit(Store(ty, rs1, rs2));
+                    match rs1.kind {
+                        LirValKind::Mem(..) => {
+                            builder.emit(Store(rs1, rs2));
                         }
-                        VVal::Reg(rs1) => {
-                            builder.emit(Copyr(ty, rs1, rs2));
+                        _ => {
+                            builder.emit(Copy(rs1, rs2));
                         }
                     }
                     rs2
                 }
                 ExprKind::Deref { rhs: store_target } => {
-                    let ty = rhs.inner.meta.into();
                     let rs1 = self.lower_expr(builder, *store_target);
                     let rs2 = self.lower_expr(builder, *rhs);
-                    builder.emit(Store(ty, rs1, rs2));
+                    builder.emit(Store(rs1, rs2));
                     rs1
                 }
                 _ => unreachable!(),
             },
             TirExprKind::Deref { rhs } => {
-                let ty = expr.inner.meta.into();
                 let rs1 = self.lower_expr(builder, *rhs);
-                builder.emit(Load(ty, dst, rs1));
+                builder.emit(Load(dst, rs1));
                 dst
             }
             // AddrOf is a meta-instruction. It doesn't actually produce any "work" per-se.
@@ -253,10 +246,10 @@ impl Compiler {
                 let ExprKind::Ident(varname) = rhs.inner.kind else {
                     unreachable!()
                 };
-                let Some(val) = self.func.var2val.get(&varname).copied() else {
+                let Some(rs1) = self.func.var2val.get(&varname).copied() else {
                     panic!("Lvar not found: {varname}");
                 };
-                let VVal::Ptr(rs1) = val else {
+                let LirValKind::Mem(..) = rs1.kind else {
                     panic!("All named storage expressions should be allocated on the stack by now")
                 };
                 rs1

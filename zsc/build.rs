@@ -1,4 +1,5 @@
 fn main() {
+    println!("cargo::rerun-if-changed=autogen/");
     autogen_file("x86");
     autogen_file("lir");
     autogen_file("riscv");

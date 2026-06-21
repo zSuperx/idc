@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
-use crate::prelude::*;
+use crate::{arch::lir::LirVal, prelude::*};
 
 use registry::Registry;
 
 use crate::{
-    arch::lir::VVal,
     ast::*,
     tir::{TirType, TypeId},
 };
@@ -97,5 +96,5 @@ pub struct FnCtx {
     pub env: Env<&'static str, (StringId, TypeId)>, // Tracks scopes and string -> var, type mappings
     pub return_type: Option<Spanned<TypeId>>,       // Return type of current function
     pub symbol_table: HashMap<StringId, SymbolInfo>,
-    pub var2val: HashMap<StringId, VVal>,
+    pub var2val: HashMap<StringId, LirVal>,
 }

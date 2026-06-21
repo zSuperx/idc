@@ -1,22 +1,49 @@
 #[derive(Clone, Copy, Debug)]
-pub enum x86Val {
+pub enum x86ValKind {
     Imm(i128),
-    Reg(usize, usize),
-    Mem(usize, usize, i128),
+    Reg(usize),
+    Mem(usize, i128),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct x86Val {
+    pub kind: x86ValKind,
+    pub size: usize,
+}
+
+impl x86Val {
+    pub fn imm(val: i128, size: usize) -> Self {
+        Self {
+            kind: x86ValKind::Imm(val),
+            size,
+        }
+    }
+
+    pub const fn reg(val: usize, size: usize) -> Self {
+        Self {
+            kind: x86ValKind::Reg(val),
+            size,
+        }
+    }
+
+    /// Memory read of `size` bytes. This will always use the 8-byte register variant
+    pub fn mem(val: usize, offset: i128, size: usize) -> Self {
+        Self {
+            kind: x86ValKind::Mem(val, offset),
+            size,
+        }
+    }
 }
 
 impl std::fmt::Display for x86Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            x86Val::Imm(imm) => f.write_fmt(format_args!("{imm}")),
-            x86Val::Reg(width, reg) => {
-                f.write_fmt(format_args!(
-                    "{}",
-                    reg_name((*reg).into(), *width)
-                ))
+        match self.kind {
+            x86ValKind::Imm(imm) => f.write_fmt(format_args!("{imm}")),
+            x86ValKind::Reg(reg) => {
+                f.write_fmt(format_args!("{}", sized_reg(x86Reg::from(reg), self.size)))
             }
-            x86Val::Mem(width, reg, imm) => {
-                let width_spec = match width {
+            x86ValKind::Mem(reg, imm) => {
+                let width_spec = match self.size {
                     1 => "byte",
                     2 => "word",
                     4 => "dword",
@@ -26,16 +53,16 @@ impl std::fmt::Display for x86Val {
                 match imm {
                     ..0 => f.write_fmt(format_args!(
                         "{width_spec} [{} - {}]",
-                        reg_name((*reg).into(), 8),
+                        sized_reg(x86Reg::from(reg), 8),
                         imm.abs()
                     )),
                     0 => f.write_fmt(format_args!(
                         "{width_spec} [{}]",
-                        reg_name((*reg).into(), 8)
+                        sized_reg(x86Reg::from(reg), 8)
                     )),
                     0.. => f.write_fmt(format_args!(
                         "{width_spec} [{} + {}]",
-                        reg_name((*reg).into(), 8),
+                        sized_reg(x86Reg::from(reg), 8),
                         imm.abs()
                     )),
                 }
@@ -70,7 +97,7 @@ impl From<usize> for x86Reg {
     }
 }
 
-fn reg_name(reg: x86Reg, width: usize) -> &'static str {
+fn sized_reg(reg: x86Reg, size: usize) -> &'static str {
     let names = match reg {
         x86Reg::A => ["al", "ax", "eax", "rax"],
         x86Reg::B => ["bl", "bx", "ebx", "rbx"],
@@ -89,7 +116,7 @@ fn reg_name(reg: x86Reg, width: usize) -> &'static str {
         x86Reg::R14 => ["r14b", "r14w", "r14d", "r14"],
         x86Reg::R15 => ["r15b", "r15w", "r15d", "r15"],
     };
-    match width {
+    match size {
         1 => names[0],
         2 => names[1],
         4 => names[2],
