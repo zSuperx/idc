@@ -2,6 +2,8 @@ use crate::aux::Compiler;
 use crate::{add_str, ast::*};
 use crate::{hir::*, source};
 
+use crate::prelude::*;
+
 // Parser implementation
 impl Compiler {
     pub fn parse_obj(&mut self) -> Spanned<HirObj> {
@@ -10,7 +12,7 @@ impl Compiler {
             Token::Fn => self.parse_func(),
             Token::Global => self.parse_global(),
             Token::Struct => self.parse_struct(),
-            _ => panic!("Expected `global`, `fn`, or `struct`, but got {tok}"),
+            _ => die!("Expected `global`, `fn`, or `struct`, but got {tok}"),
         }
     }
 
@@ -59,7 +61,7 @@ impl Compiler {
                 let ty = HirType::Named(add_str("void"));
                 self.commit(ty, span_start)
             }
-            _ => panic!("Expected return type or function body, found {peeked}"),
+            _ => die!("Expected return type or function body, found {peeked}"),
         };
 
         let body = Box::new(self.parse_block());
@@ -248,7 +250,7 @@ impl Compiler {
                 let kind = HirExprKind::AddrOf { rhs };
                 HirExpr::new(kind, ())
             }
-            _ => panic!("Expected start of expression, found {tok}"),
+            _ => die!("Expected start of expression, found {tok}"),
         };
         self.commit(typed_expr, span_start.merge(self.last_span))
     }
@@ -323,7 +325,7 @@ impl Compiler {
                 };
                 HirExpr::new(kind, ())
             }
-            _ => panic!("Expected infix operator, found {op}"),
+            _ => die!("Expected infix operator, found {op}"),
         };
         self.commit(output, span_start)
     }
@@ -437,7 +439,7 @@ impl Compiler {
         }
 
         let Ok(raw) = str::from_utf8(&buf) else {
-            panic!(
+            die!(
                 "Non-utf8 characters are not supported: `{}` found near: {}",
                 source()[0],
                 self.last_span
@@ -465,7 +467,7 @@ impl Compiler {
         }
 
         let Ok(raw) = str::from_utf8(source().get(start..self.cursor)?) else {
-            panic!(
+            die!(
                 "Non-utf8 characters are not supported: `{}` found near: {}",
                 source()[0],
                 self.last_span
@@ -512,7 +514,7 @@ impl Compiler {
 
         // +1/-1 to disclude the surrounding "..."
         let Ok(raw) = str::from_utf8(source().get(start + 1..self.cursor - 1)?) else {
-            panic!(
+            die!(
                 "Non-utf8 characters are not supported: `{}` found near: {}",
                 source()[0],
                 self.last_span
@@ -581,7 +583,7 @@ impl Compiler {
             b">" => Gt,
             b"<=" => LtEq,
             b">=" => GtEq,
-            x => panic!(
+            x => die!(
                 "Unknown token: `{}` found near: {}",
                 str::from_utf8(x).unwrap(),
                 self.last_span
@@ -627,7 +629,7 @@ impl Compiler {
         let next = self.eat();
         if next.inner != expected {
             next.span.print_span();
-            panic!("Expected {expected:?}, found {next}");
+            die!("Expected {expected:?}, found {next}");
         }
     }
 
@@ -639,7 +641,7 @@ impl Compiler {
         let next = self.eat();
         match next.inner {
             Token::Ident(s) => s,
-            _ => panic!("Expected identifier, found {next}"),
+            _ => die!("Expected identifier, found {next}"),
         }
     }
 }

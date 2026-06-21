@@ -25,13 +25,6 @@ mod parser;
 mod prelude;
 mod tir;
 
-macro_rules! die {
-    ($($fmtargs:tt)*) => {{
-        eprintln!($($fmtargs)*);
-        ::std::process::exit(1);
-    }};
-}
-
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);
 pub static mut STRINGS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
@@ -171,7 +164,7 @@ pub struct Config {
     output: String,
     action: Action,
     verbose: bool,
-    do_reg_alloc: bool,
+    no_regalloc: bool,
 }
 
 fn validate_config() -> Config {
@@ -213,14 +206,10 @@ fn validate_config() -> Config {
         }
     });
     let verbose = args.verbose;
-    let do_reg_alloc = if args.no_reg_alloc {
-        if action != Action::EmitAsm {
-            die!("--no-reg-alloc can only be used with -S");
-        }
-        false
-    } else {
-        true
-    };
+    let no_regalloc = args.no_regalloc;
+    if no_regalloc && action != Action::EmitAsm {
+        die!("--no-regalloc can only be used with -S");
+    }
 
     Config {
         target,
@@ -228,7 +217,7 @@ fn validate_config() -> Config {
         output,
         action,
         verbose,
-        do_reg_alloc,
+        no_regalloc,
     }
 }
 
@@ -259,7 +248,7 @@ pub struct Args {
 
     /// Skips the register allocation phase. This is only valid if using -S
     #[arg(long)]
-    no_reg_alloc: bool,
+    no_regalloc: bool,
 }
 
 // fn parse_args() -> Config {

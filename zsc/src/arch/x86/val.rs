@@ -60,7 +60,7 @@ impl std::fmt::Display for x86Val {
                         "{width_spec} [{}]",
                         sized_reg(reg, 8)
                     )),
-                    0.. => f.write_fmt(format_args!(
+                    1.. => f.write_fmt(format_args!(
                         "{width_spec} [{} + {}]",
                         sized_reg(reg, 8),
                         imm.abs()

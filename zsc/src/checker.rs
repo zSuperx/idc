@@ -22,7 +22,7 @@ impl Compiler {
                 if let Some(t) = self.known_types.get(tir_ty) {
                     t
                 } else {
-                    panic!("Unknown type: {ty}");
+                    die!("Unknown type: {ty}");
                 }
             }
             HirType::Pointer(p) => {
@@ -76,7 +76,7 @@ impl Compiler {
                         .insert(argname.inner, (var_id.inner, var_ty.inner))
                         .is_some()
                     {
-                        panic!("Duplicate parameter: {argname}");
+                        die!("Duplicate parameter: {argname}");
                     };
                     arg_types.push(var_ty.inner);
                 }
@@ -113,7 +113,7 @@ impl Compiler {
                 if let Some(ty) = ty
                     && ty.inner != rhs.inner.meta
                 {
-                    panic!(
+                    die!(
                         "Type mismatch. Expected {ty} \n...but got `{}`: {}",
                         rhs.inner.meta, rhs.span,
                     );
@@ -146,7 +146,7 @@ impl Compiler {
                 let cond = self.check_expr(cond, None);
                 let cond_ty = cond.inner.meta.lookup();
                 if *cond_ty != TirType::Bool {
-                    panic!(
+                    die!(
                         "Type mismatch. Expected `{}` but got `{}`: {}",
                         TirType::Bool,
                         cond_ty,
@@ -161,7 +161,7 @@ impl Compiler {
                 let fn_ret_type = self.func.return_type.unwrap();
                 let checked_val = self.check_expr(val, Some(fn_ret_type.inner));
                 if checked_val.inner.meta != fn_ret_type.inner {
-                    panic!(
+                    die!(
                         "Mismatched return type. Function {} expects {fn_ret_type}but got {}: {}",
                         self.func.raw_name.inner, checked_val.inner.meta, checked_val.span
                     )
@@ -217,11 +217,11 @@ impl Compiler {
                     TirType::I64 => int_str.parse::<i64>().map(|i| i as i128),
                     TirType::U64 => int_str.parse::<u64>().map(|i| i as i128),
                     _ => {
-                        panic!("`{int_str}` could not be parsed as a {ty}");
+                        die!("`{int_str}` could not be parsed as a {ty}");
                     }
                 };
                 let Ok(num) = result else {
-                    panic!("`{int_str}` could not be parsed as a `{ty}`: {span}");
+                    die!("`{int_str}` could not be parsed as a `{ty}`: {span}");
                 };
                 let kind = TirExprKind::Num(num);
                 TirExpr::new(kind, ty)
@@ -233,7 +233,7 @@ impl Compiler {
             }
             HirExprKind::Ident(i) => {
                 let Some((var, ty)) = self.func.env.get(&i) else {
-                    panic!("Variable `{i}` used but not defined: {span}");
+                    die!("Variable `{i}` used but not defined: {span}");
                 };
                 let kind = TirExprKind::Ident(var);
                 TirExpr::new(kind, ty)
@@ -244,10 +244,10 @@ impl Compiler {
                 let checked_rhs = self.check_expr(*rhs, Some(lhs_ty));
                 let rhs_ty = checked_rhs.inner.meta;
                 if lhs_ty != rhs_ty {
-                    panic!("Cannot assign a `{rhs_ty}` to `{lhs_ty}`: {span}")
+                    die!("Cannot assign a `{rhs_ty}` to `{lhs_ty}`: {span}")
                 }
                 if !checked_lhs.inner.kind.is_valid_lvalue() {
-                    panic!(
+                    die!(
                         "Cannot assign to this expression as it is not a valid LVALUE: {}, {:?}",
                         checked_lhs.span, checked_lhs.inner.kind
                     )
@@ -278,7 +278,7 @@ impl Compiler {
                         // the pointer is pointing to
                         let ty = match checked_ty.lookup() {
                             TirType::Pointer(id) => *id,
-                            _ => panic!(
+                            _ => die!(
                                 "Cannot dereference non-pointer type `{checked_ty}`: {checked_rhs}"
                             ),
                         };
@@ -305,7 +305,7 @@ impl Compiler {
 
                         // Mark this symbol as address-taken
                         let Some(info) = self.func.symbol_table.get_mut(&varname) else {
-                            panic!("Undefined variable {varname}");
+                            die!("Undefined variable {varname}");
                         };
                         info.address_taken = true;
 
@@ -314,7 +314,7 @@ impl Compiler {
                     }
                     // ... if we're taking address of a dereference, they cancel out e.g. (&*y == y)
                     ExprKind::Deref { rhs } => self.check_expr(*rhs, hint).inner,
-                    _ => panic!("Cannot take the address of this type of expression: {rhs}"),
+                    _ => die!("Cannot take the address of this type of expression: {rhs}"),
                 }
             }
             HirExprKind::Un { op, rhs } => {
@@ -323,13 +323,13 @@ impl Compiler {
                 let ty = match op {
                     UnOp::Not => {
                         if *(rhs_ty.lookup()) != TirType::Bool {
-                            panic!("Cannot logical not a `{rhs_ty}`: {span}")
+                            die!("Cannot logical not a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
                     }
                     UnOp::Neg => {
                         if !(rhs_ty.lookup()).is_signed() {
-                            panic!("Cannot negate a `{rhs_ty}`: {span}")
+                            die!("Cannot negate a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
                     }
@@ -348,37 +348,37 @@ impl Compiler {
                 let ty = match op {
                     BinOp::Add => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
-                            panic!("Cannot add `{lhs_ty}` and `{rhs_ty}`: {span}")
+                            die!("Cannot add `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Sub => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
-                            panic!("Cannot subtract `{lhs_ty}` and `{rhs_ty}`: {span}")
+                            die!("Cannot subtract `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Mul => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
-                            panic!("Cannot multiply `{lhs_ty}` and `{rhs_ty}`: {span}")
+                            die!("Cannot multiply `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Div => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
-                            panic!("Cannot divide `{lhs_ty}` and `{rhs_ty}`: {span}")
+                            die!("Cannot divide `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Eq => {
                         if lhs_ty != rhs_ty {
-                            panic!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
+                            die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         self.known_types.add(TirType::Bool)
                     }
                     BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
-                            panic!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
+                            die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         self.known_types.add(TirType::Bool)
                     }

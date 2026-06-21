@@ -34,7 +34,7 @@ impl Compiler {
                     match kind {
                         SymbolKind::Local => {
                             let dst = LirVal::ptr(builder.next_reg(), ty.lookup().size());
-                            builder.emit(Alloc(LirType::Ptr, dst, name));
+                            builder.emit(Alloc(ty.into(), dst, name));
                             self.func.var2val.insert(name, dst);
                         }
                         SymbolKind::Param(num) => {
@@ -42,7 +42,7 @@ impl Compiler {
                             builder.emit(Param(ty.into(), dst, name, num));
                             if address_taken {
                                 let new_dst = LirVal::ptr(builder.next_reg(), ty.lookup().size());
-                                builder.emit(Alloc(LirType::Ptr, new_dst, name));
+                                builder.emit(Alloc(ty.into(), new_dst, name));
                                 builder.emit(Store(ty.into(), new_dst, dst));
                                 self.func.var2val.insert(name, new_dst);
                             } else {
@@ -61,7 +61,7 @@ impl Compiler {
                 if builder.get_terminator().is_none() {
                     match returns.inner.lookup() {
                         TirType::Void => builder.buf.push(Retv),
-                        _ => panic!(
+                        _ => die!(
                             "Control flow reaches the end of a function that was expected to return {returns}"
                         ),
                     }
@@ -79,7 +79,7 @@ impl Compiler {
                         Jmp(tgt) => bb.succ.push(*tgt),
                         Retv => {}
                         Ret(..) => {}
-                        x => panic!("How did this end up as a terminator? {x}"),
+                        x => die!("How did this end up as a terminator? {x}"),
                     }
                 }
 
@@ -94,7 +94,7 @@ impl Compiler {
             TirStmtKind::Let { ty, lhs, rhs } => {
                 let rs1 = self.func.var2val.get(&lhs.inner).copied().unwrap();
                 let LirValKind::Mem(..) = rs1.kind else {
-                    panic!("Local variable must be an alloca'd pointer");
+                    die!("Local variable must be an alloca'd pointer");
                 };
                 let ty = rhs.inner.meta.into();
                 let rs2 = self.lower_expr(builder, rhs);
@@ -169,7 +169,7 @@ impl Compiler {
             }
             TirExprKind::Ident(varname) => {
                 let Some(rs1) = self.func.var2val.get(&varname).copied() else {
-                    panic!("Undefined variable: {varname}");
+                    die!("Undefined variable: {varname}");
                 };
                 match rs1.kind {
                     LirValKind::Mem(..) => {
@@ -216,7 +216,7 @@ impl Compiler {
             TirExprKind::Assign { lhs, rhs } => match lhs.inner.kind {
                 ExprKind::Ident(varname) => {
                     let Some(rs1) = self.func.var2val.get(&varname).copied() else {
-                        panic!("Lvar not found: {varname}");
+                        die!("Lvar not found: {varname}");
                     };
                     let rs2 = self.lower_expr(builder, *rhs);
                     match rs1.kind {
@@ -250,10 +250,10 @@ impl Compiler {
                     unreachable!()
                 };
                 let Some(rs1) = self.func.var2val.get(&varname).copied() else {
-                    panic!("Lvar not found: {varname}");
+                    die!("Lvar not found: {varname}");
                 };
                 let LirValKind::Mem(..) = rs1.kind else {
-                    panic!("All named storage expressions should be allocated on the stack by now")
+                    die!("All named storage expressions should be allocated on the stack by now")
                 };
                 rs1
             }

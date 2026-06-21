@@ -14,9 +14,11 @@ mod env;
 pub use env::*;
 
 mod utils;
-use registry::Id;
+#[macro_export]
 pub use utils::*;
+pub use crate::die;
+
+use registry::Id;
+pub type StringId = Id<String>;
 
 pub use crate::autogen::*;
-
-pub type StringId = Id<String>;
