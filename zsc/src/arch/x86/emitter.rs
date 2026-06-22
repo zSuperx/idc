@@ -401,12 +401,14 @@ impl Emitter {
         }
 
         for bb in builder.bbs.iter_mut() {
-            // let new = vec![];
             for i in bb.instructions.iter_mut() {
                 for dst in i.dsts() {
                     match &mut dst.kind {
                         Reg(reg) | Mem(reg, _) => {
                             // TODO: This is NOT how precoloring works. Fix it!!
+                            // True precoloring requires integration with the graph coloring
+                            // algorithm itself, meaning I either need to find a better crate to do
+                            // it for me, or fork it myself (likely).
                             if *reg > 15 {
                                 *reg = coloring[*reg];
                             }

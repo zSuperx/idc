@@ -1,9 +1,9 @@
 use crate::aux::{SymbolInfo, SymbolKind};
 use crate::hir::HirType;
 use crate::hir::*;
+use crate::prelude::*;
 use crate::tir::*;
 use crate::{ast::*, aux::Compiler, tir::TypeId};
-use crate::prelude::*;
 
 impl Compiler {
     fn next_var(&mut self, argname: &str) -> StringId {
@@ -32,7 +32,14 @@ impl Compiler {
             HirType::Function { args, returns } => {
                 let args = args
                     .into_iter()
-                    .map(|a| self.check_type(Spanned::new(a, ty.span)).inner)
+                    .map(|a| {
+                        let arg_ty = self.check_type(Spanned::new(a, ty.span));
+                        if *arg_ty.inner.lookup() == TirType::Void {
+                            die!("Argument cannot have type `void`: {arg_ty}")
+                        }
+                        println!("{arg_ty}");
+                        arg_ty.inner
+                    })
                     .collect();
                 let returns = self.check_type(Spanned::new(*returns, ty.span)).inner;
                 self.known_types.add(TirType::Function { args, returns })
@@ -57,8 +64,9 @@ impl Compiler {
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
                     let var_id = argname.map(|name| self.next_var(*name));
                     let var_ty = self.check_type(ty);
-
-
+                    if *var_ty.inner.lookup() == TirType::Void {
+                        die!("Function argument cannot have type {var_ty}");
+                    }
                     self.func.symbol_table.insert(
                         var_id.inner,
                         SymbolInfo {
@@ -115,7 +123,8 @@ impl Compiler {
                 {
                     die!(
                         "Type mismatch. Expected {ty} \n...but got `{}`: {}",
-                        rhs.inner.meta, rhs.span,
+                        rhs.inner.meta,
+                        rhs.span,
                     );
                 }
                 let var_id = lhs.map(|name| self.next_var(*name));
@@ -163,7 +172,9 @@ impl Compiler {
                 if checked_val.inner.meta != fn_ret_type.inner {
                     die!(
                         "Mismatched return type. Function {} expects {fn_ret_type}but got {}: {}",
-                        self.func.raw_name.inner, checked_val.inner.meta, checked_val.span
+                        self.func.raw_name.inner,
+                        checked_val.inner.meta,
+                        checked_val.span
                     )
                 }
                 TirStmtKind::Return(checked_val)
@@ -249,7 +260,8 @@ impl Compiler {
                 if !checked_lhs.inner.kind.is_valid_lvalue() {
                     die!(
                         "Cannot assign to this expression as it is not a valid LVALUE: {}, {:?}",
-                        checked_lhs.span, checked_lhs.inner.kind
+                        checked_lhs.span,
+                        checked_lhs.inner.kind
                     )
                 }
                 let ty = lhs_ty;
