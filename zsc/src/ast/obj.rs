@@ -22,7 +22,7 @@ pub enum ObjKind<M, N, T, I> {
     },
     Global {
         lhs: Spanned<I>,
-        rhs: Box<Expr<M, N, I>>,
+        rhs: Box<Expr<M, N, T, I>>,
     },
     Struct {
         name: Spanned<I>,

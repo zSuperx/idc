@@ -17,20 +17,20 @@ pub enum StmtKind<M, N, T, I> {
     Let {
         lhs: Spanned<I>,
         ty: Option<Spanned<T>>,
-        rhs: Spanned<Expr<M, N, I>>,
+        rhs: Spanned<Expr<M, N, T, I>>,
     },
     While {
-        cond: Spanned<Expr<M, N, I>>,
+        cond: Spanned<Expr<M, N, T, I>>,
         body: Box<Spanned<Stmt<M, N, T, I>>>,
     },
     Continue,
     Break,
     If {
-        cond: Spanned<Expr<M, N, I>>,
+        cond: Spanned<Expr<M, N, T, I>>,
         then_: Box<Spanned<Stmt<M, N, T, I>>>,
         else_: Box<Spanned<Stmt<M, N, T, I>>>,
     },
-    Return(Spanned<Expr<M, N, I>>),
+    Return(Spanned<Expr<M, N, T, I>>),
     Block(Vec<Spanned<Stmt<M, N, T, I>>>),
-    Expr(Spanned<Expr<M, N, I>>),
+    Expr(Spanned<Expr<M, N, T, I>>),
 }

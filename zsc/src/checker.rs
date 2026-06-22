@@ -329,6 +329,20 @@ impl Compiler {
                     _ => die!("Cannot take the address of this type of expression: {rhs}"),
                 }
             }
+            HirExprKind::Cast { target_ty, rhs } => {
+                // TODO: enforce type casting rules
+                // Casting should be valid between:
+                // - Same sized types (this means all pointers can be cast to and from each other)
+                // - Any primitive with any other primitive
+                let checked_ty = self.check_type(target_ty);
+                let checked_rhs = Box::new(self.check_expr(*rhs, None));
+                let ty = checked_ty.inner;
+                let kind = TirExprKind::Cast {
+                    target_ty: checked_ty,
+                    rhs: checked_rhs,
+                };
+                TirExpr::new(kind, ty)
+            }
             HirExprKind::Un { op, rhs } => {
                 let checked_rhs = self.check_expr(*rhs, hint);
                 let rhs_ty = checked_rhs.inner.meta;

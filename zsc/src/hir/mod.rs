@@ -8,8 +8,8 @@ type NumRep = &'static str;
 type Type = HirType;
 type Ident = &'static str;
 
-pub type HirExprKind = ExprKind<Meta, NumRep, Ident>;
-pub type HirExpr = Expr<Meta, NumRep, Ident>;
+pub type HirExprKind = ExprKind<Meta, NumRep, Type, Ident>;
+pub type HirExpr = Expr<Meta, NumRep, Type, Ident>;
 
 pub type HirStmt = Stmt<Meta, NumRep, Type, Ident>;
 pub type HirStmtKind = StmtKind<Meta, NumRep, Type, Ident>;

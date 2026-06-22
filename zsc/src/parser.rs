@@ -253,6 +253,15 @@ impl Compiler {
                 let kind = HirExprKind::AddrOf { rhs };
                 HirExpr::new(kind, ())
             }
+            Token::At => {
+                let power = prefix_power(Token::At).unwrap();
+                let target_ty = self.parse_type();
+                self.expect(Token::LParen);
+                let rhs = Box::new(self._parse_expr(power));
+                self.expect(Token::RParen);
+                let kind = HirExprKind::Cast { target_ty, rhs };
+                HirExpr::new(kind, ())
+            }
             _ => die!("Expected start of expression, found {tok}"),
         };
         self.commit(typed_expr, span_start.merge(self.last_span))
@@ -363,7 +372,7 @@ impl Compiler {
 
 fn prefix_power(kind: Token) -> Option<f32> {
     let power = match kind {
-        Token::Bang | Token::Minus | Token::Star | Token::And => 9.0,
+        Token::Bang | Token::Minus | Token::Star | Token::And | Token::At => 9.0,
         _ => return None, // Not an prefix operator
     };
     Some(power)

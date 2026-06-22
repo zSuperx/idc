@@ -9,8 +9,8 @@ type NumRep = i128;
 type Type = TypeId;
 type Ident = StringId;
 
-pub type TirExprKind = ExprKind<Meta, NumRep, Ident>;
-pub type TirExpr = Expr<Meta, NumRep, Ident>;
+pub type TirExprKind = ExprKind<Meta, NumRep, Type, Ident>;
+pub type TirExpr = Expr<Meta, NumRep, Type, Ident>;
 
 pub type TirStmt = Stmt<Meta, NumRep, Type, Ident>;
 pub type TirStmtKind = StmtKind<Meta, NumRep, Type, Ident>;
