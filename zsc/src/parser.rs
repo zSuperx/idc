@@ -38,6 +38,9 @@ impl Compiler {
         while self.peek().inner != Token::RParen {
             if !args.is_empty() {
                 self.expect(Token::Comma);
+                if self.is_next(Token::RParen) {
+                    break;
+                }
             }
             let argname = {
                 let span_start = self.mark();
