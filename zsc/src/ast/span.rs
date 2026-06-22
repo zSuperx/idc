@@ -47,6 +47,8 @@ impl Span {
         }
     }
 
+    // TODO: This is partially AI slop! Rewrite it, it can be WAY better integrated with the
+    // compiler API
     pub fn content(&self) -> String {
         let source = source();
         let line_start = source[..self.lo]
