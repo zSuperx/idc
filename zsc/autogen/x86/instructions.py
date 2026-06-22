@@ -45,7 +45,7 @@ INSTRUCTIONS = [
     move("cmovge"),
     #
     InstrInfo("cmp", [V, V], uses=[0, 1]),
-    InstrInfo("comment", ["String"], fmt="; {v0}"),
+    InstrInfo("comment", ["String"], fmt="/* {v0} */"),
     InstrInfo("push", [V], defs=[], uses=[0]),
     InstrInfo("pop", [V], defs=[0], uses=[]),
     # terminators

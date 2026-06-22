@@ -17,7 +17,7 @@ impl LirVal {
         }
     }
 
-    pub fn ptr(reg: usize, size: usize) -> Self {
+    pub fn mem(reg: usize, size: usize) -> Self {
         LirVal {
             kind: LirValKind::Mem(reg),
             size,

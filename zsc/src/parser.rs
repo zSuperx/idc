@@ -628,7 +628,7 @@ impl Compiler {
     pub fn expect(&mut self, expected: Token) {
         let next = self.eat();
         if next.inner != expected {
-            next.span.print_span();
+            next.span.content();
             die!("Expected {expected:?}, found {next}");
         }
     }

@@ -31,9 +31,11 @@ INSTRUCTIONS = [
     binop("ule"),
     InstrInfo("copy", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("alloc", [T, V, "StringId"], defs=[1], uses=[]),
-    InstrInfo("param", [T, V, "StringId", "usize"], defs=[1], uses=[]),
+    InstrInfo("arg", [T, V, "StringId", "usize"], defs=[1], uses=[]),
+    InstrInfo("stkarg", [T, V, "StringId", "usize"], defs=[1], uses=[]),
     InstrInfo("load", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("store", [T, V, V], defs=[], uses=[1, 2]),
+    InstrInfo("comment", ["String"], fmt="; {v0}"),
     # terminators
     InstrInfo("retv", is_terminator=True),
     InstrInfo("ret", [T, V], defs=[], uses=[1], is_terminator=True),

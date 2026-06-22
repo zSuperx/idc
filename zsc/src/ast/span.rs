@@ -47,7 +47,7 @@ impl Span {
         }
     }
 
-    pub fn print_span(&self) -> String {
+    pub fn content(&self) -> String {
         let source = source();
         let line_start = source[..self.lo]
             .iter()
@@ -91,7 +91,7 @@ impl Span {
 
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.print_span())
+        f.write_str(&self.content())
     }
 }
 

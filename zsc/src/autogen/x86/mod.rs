@@ -76,7 +76,7 @@ impl std::fmt::Display for x86Instr {
 						Self::Cmovg(v0, v1) => f.write_fmt(format_args!("cmovg {v0}, {v1}")),
 						Self::Cmovge(v0, v1) => f.write_fmt(format_args!("cmovge {v0}, {v1}")),
 						Self::Cmp(v0, v1) => f.write_fmt(format_args!("cmp {v0}, {v1}")),
-						Self::Comment(v0) => f.write_fmt(format_args!("; {v0}")),
+						Self::Comment(v0) => f.write_fmt(format_args!("/* {v0} */")),
 						Self::Push(v0) => f.write_fmt(format_args!("push {v0}")),
 						Self::Pop(v0) => f.write_fmt(format_args!("pop {v0}")),
 						Self::Call(v0) => f.write_fmt(format_args!("call {v0}")),

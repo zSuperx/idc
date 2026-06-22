@@ -33,19 +33,18 @@ impl Compiler {
                     // TODO: alloc params and locals
                     match kind {
                         SymbolKind::Local => {
-                            let dst = LirVal::ptr(builder.next_reg(), ty.lookup().size());
+                            let dst = LirVal::mem(builder.next_reg(), ty.lookup().size());
                             builder.emit(Alloc(ty.into(), dst, name));
                             self.func.var2val.insert(name, dst);
                         }
                         SymbolKind::Param(num) => {
-                            let dst = LirVal::reg(builder.next_reg(), ty.lookup().size());
-                            builder.emit(Param(ty.into(), dst, name, num));
                             if address_taken {
-                                let new_dst = LirVal::ptr(builder.next_reg(), ty.lookup().size());
-                                builder.emit(Alloc(ty.into(), new_dst, name));
-                                builder.emit(Store(ty.into(), new_dst, dst));
-                                self.func.var2val.insert(name, new_dst);
+                                let dst = LirVal::mem(builder.next_reg(), ty.lookup().size());
+                                builder.emit(Stkarg(ty.into(), dst, name, num));
+                                self.func.var2val.insert(name, dst);
                             } else {
+                                let dst = LirVal::reg(builder.next_reg(), ty.lookup().size());
+                                builder.emit(Arg(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             }
                         }
@@ -90,6 +89,12 @@ impl Compiler {
     }
 
     fn lower_stmt(&mut self, builder: &mut Builder<LirInstr>, stmt: Spanned<TirStmt>) {
+        // TODO: Change this its kind of stupid. Span::content() should return just the source code
+        // slice, whereas Span::to_string() should print the file:row:col, the content, and the
+        // arrows
+        builder.emit(Comment(
+            stmt.span.content().split('\n').nth(3).unwrap().to_string(),
+        ));
         match stmt.inner.kind {
             TirStmtKind::Let { ty, lhs, rhs } => {
                 let rs1 = self.func.var2val.get(&lhs.inner).copied().unwrap();
@@ -253,7 +258,7 @@ impl Compiler {
                     die!("Lvar not found: {varname}");
                 };
                 let LirValKind::Mem(..) = rs1.kind else {
-                    die!("All named storage expressions should be allocated on the stack by now")
+                    panic!("All named storage expressions should be allocated on the stack by now")
                 };
                 rs1
             }

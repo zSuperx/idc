@@ -69,6 +69,11 @@ impl Emitter {
         ret
     }
 
+    fn sub_rsp(&mut self, amount: i128, builder: &mut Builder<x86Instr>) {
+        self.v_rsp -= amount;
+        builder.emit(Sub(RSP, x86Val::imm(amount as i128, 8)));
+    }
+
     pub fn translate_func(&mut self, f: Builder<LirInstr>) -> Builder<x86Instr> {
         let mut builder = Builder::new(f.name, f.bb_count, f.vreg_count + 16);
 
@@ -83,30 +88,38 @@ impl Emitter {
         while let Some(bb) = bb_iter.next() {
             builder.start_new_block(bb.name);
             for i in bb.instructions.iter() {
-                if CFG.verbose {
-                    builder.emit(Comment(format!("{i}")));
-                }
-                match *i {
-                    LirInstr::Param(ty, dst, name, num) => {
-                        let loc = match num {
-                            0 => x86Val::reg(DI, ty.size()),
-                            1 => x86Val::reg(SI, ty.size()),
-                            2 => x86Val::reg(D, ty.size()),
-                            3 => x86Val::reg(C, ty.size()),
-                            4 => x86Val::reg(R8, ty.size()),
-                            5 => x86Val::reg(R9, ty.size()),
-                            _ => x86Val::mem(BP, num.saturating_sub(6) as i128 + 8, ty.size()),
-                        };
-                        builder.emit(Comment(format!("{ty}: {dst} -> {loc}")));
+                match i.clone() {
+                    LirInstr::Comment(s) => {
+                        if CFG.verbose {
+                            builder.emit(Comment(s));
+                        }
+                    }
+                    // Stack arg. This IR instruction just ensures that the num'th argument is moved
+                    // to the stack
+                    LirInstr::Stkarg(ty, dst, name, num) => {
+                        let mut loc = x86Val::sysv_arg_n(num, ty.size());
+                        if num <= 5 {
+                            // This means loc is a register. We must move it to the stack
+                            let stk_loc = x86Val::mem(BP, self.v_rsp - 8, ty.size());
+                            let aligned_size = align_n(ty.size() as i128, 16);
+                            self.sub_rsp(aligned_size, &mut builder);
+                            builder.emit(Mov(stk_loc, loc));
+                            loc = stk_loc;
+                        }
+                        builder.emit(Comment(format!("{name} ({ty}): {dst} -> {loc}")));
+                        self.v2p.insert(dst, loc);
+                    }
+                    LirInstr::Arg(ty, dst, name, num) => {
+                        let loc = x86Val::sysv_arg_n(num, ty.size());
+                        builder.emit(Comment(format!("{name} ({ty}): {dst} -> {loc}")));
                         self.v2p.insert(dst, loc);
                     }
                     LirInstr::Alloc(ty, dst, name) => {
                         let loc = x86Val::mem(BP, self.v_rsp - 8, ty.size());
                         // TODO: alignment correction should be done after an "sroa" pass i think
                         let aligned_size = align_n(ty.size() as i128, 16);
-                        self.v_rsp -= aligned_size;
-                        builder.emit(Sub(RSP, x86Val::imm(aligned_size as i128, 8)));
-                        builder.emit(Comment(format!("{dst} -> {loc}")));
+                        self.sub_rsp(aligned_size, &mut builder);
+                        builder.emit(Comment(format!("{name} ({ty}): {dst} -> {loc}")));
                         self.v2p.insert(dst, loc);
                     }
                     LirInstr::Copy(ty, dst, rs1) => {
@@ -377,11 +390,11 @@ impl Emitter {
         }
 
         let coloring = color_greedy_by_degree(&graph);
-        if CFG.verbose {
-            for (v, es) in graph.iter().enumerate() {
-                eprintln!("{v}: {es:?}");
-            }
-        }
+        // if CFG.verbose {
+        //     for (v, es) in graph.iter().enumerate() {
+        //         eprintln!("{v}: {es:?}");
+        //     }
+        // }
 
         if CFG.no_regalloc {
             return;

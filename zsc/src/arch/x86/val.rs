@@ -26,8 +26,20 @@ impl x86Val {
         }
     }
 
+    pub const fn sysv_arg_n(n: usize, size: usize) -> Self {
+        match n {
+            0 => x86Val::reg(DI, size),
+            1 => x86Val::reg(SI, size),
+            2 => x86Val::reg(D, size),
+            3 => x86Val::reg(C, size),
+            4 => x86Val::reg(R8, size),
+            5 => x86Val::reg(R9, size),
+            _ => x86Val::mem(BP, n.saturating_sub(6) as i128 + 8, size),
+        }
+    }
+
     /// Memory read of `size` bytes. This will always use the 8-byte register variant
-    pub fn mem(val: usize, offset: i128, size: usize) -> Self {
+    pub const fn mem(val: usize, offset: i128, size: usize) -> Self {
         Self {
             kind: x86ValKind::Mem(val, offset),
             size,
@@ -39,9 +51,7 @@ impl std::fmt::Display for x86Val {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.kind {
             x86ValKind::Imm(imm) => f.write_fmt(format_args!("{imm}")),
-            x86ValKind::Reg(reg) => {
-                f.write_fmt(format_args!("{}", sized_reg(reg, self.size)))
-            }
+            x86ValKind::Reg(reg) => f.write_fmt(format_args!("{}", sized_reg(reg, self.size))),
             x86ValKind::Mem(reg, imm) => {
                 let width_spec = match self.size {
                     1 => "byte",
@@ -56,10 +66,7 @@ impl std::fmt::Display for x86Val {
                         sized_reg(reg, 8),
                         imm.abs()
                     )),
-                    0 => f.write_fmt(format_args!(
-                        "{width_spec} [{}]",
-                        sized_reg(reg, 8)
-                    )),
+                    0 => f.write_fmt(format_args!("{width_spec} [{}]", sized_reg(reg, 8))),
                     1.. => f.write_fmt(format_args!(
                         "{width_spec} [{} + {}]",
                         sized_reg(reg, 8),
