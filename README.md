@@ -6,6 +6,23 @@ These are just some goals I have for this compiler project. It's not in order
 and I haven't researched every goal yet. They're just things I want to do at
 some point.
 
+- [ ] Fix register precoloring:
+    - The current model just makes a clique between all physical registers and
+      hands that to the graph coloring algorithm. Then it just ignores the
+      colors assigned to the physical registers and uses the numbers `0 - 15`
+      instead. This is WRONG.
+    - True precoloring requires integration with the graph coloring algorithm
+      itself, meaning I either need to find a better crate to do it for me, or
+      fork it and do it myself (likely).
+
+- [ ] Get a better convergence algorithm for LIVE_{IN,OUT} set computation:
+    - It can be vastly improved by popping items out of a worklist. When a
+      basic block sees its LIVE sets change, it should push its predecessors
+      into_usize the worklist.
+    - The issue is that there is currently no way to find a basic block's
+      predecessors. This is a TODO for when that API gets overhauled. For now,
+      it just loops forever until convergence.
+
 - [ ] Type casting:
     - Possible syntax:
         - `@i32(x)` / `@*i32(x)`
@@ -26,10 +43,14 @@ some point.
       emit an `And t, (1 << sizeof(T) * 8 - 1)`, which just masks out
       everything. Might have to be careful with signed integers, but think
       about that later
+    - Casting should be valid between:
+        1. Same sized types (this means all pointers can be cast to and from
+           each other)
+        2. Any primitive with any other primitive
 
 - [ ] Function calls (x86):
     - This should be easy enough, the only hurdle is tracking `use` and `def`
-      sets
+      sets in liveness analysis and register allocation
     - Off the top of my head, `foo(n1, ..., n6)` should use (in
       increasing order) `DI, SI, D, C, R8, R9` and def `A`
     - Also something that might be challenging is (re)storing caller/callee
@@ -62,11 +83,23 @@ some point.
           "decay" to a `char*`
         - As of now, this makes no sense to me.
 
+- [ ] Strings & String Literals:
+    - This kind of depends on how Arrays go. I feel like the NULL terminated
+      route is not a good idea and should be "opt-in". 
+    - That is, strings should just be an array of characters, and the language
+      itself can construct Dynamic Array Strings via structs.
+
 - [ ] Floating Point values:
     - Might be easy for x86, but god help me when I do RISC-V & ARM since they
       have separate register files for Int and FP
     - Probably look into generalizing the register allocator API first, so
       logic can be reused across architectures and int/fp
+
+- [ ] Type inference:
+    - Currently there is type checking with hints, which is what lets you omit
+      the type in `let` statements
+    - But this should eventually be changed into type inference, likely via the
+      Unification Algorithm
 
 
 _(Note: This list was created on 06/22/2026, so it may not have all goals)_

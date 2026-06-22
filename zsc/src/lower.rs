@@ -30,7 +30,6 @@ impl Compiler {
                         kind,
                         address_taken,
                     } = *info;
-                    // TODO: alloc params and locals
                     match kind {
                         SymbolKind::Local => {
                             let dst = LirVal::mem(builder.next_reg(), ty.lookup().size());
