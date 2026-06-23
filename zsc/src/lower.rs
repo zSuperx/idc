@@ -261,7 +261,8 @@ impl Compiler {
                 rs1
             }
             TirExprKind::Call { callee, args } => todo!(),
-            TirExprKind::SizeOf { rhs } => todo!(),
+            TirExprKind::Cast { target_ty, rhs } => todo!(),
+            TirExprKind::SizeOf { rhs } => unreachable!(),
         }
     }
 }

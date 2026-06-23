@@ -417,7 +417,12 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExprKind::Call { callee, args } => todo!(),
-            HirExprKind::SizeOf { rhs } => todo!(),
+            HirExprKind::SizeOf { rhs } => {
+                let rhs = self.check_expr(*rhs, None);
+                let ty = rhs.inner.meta;
+                let kind = TirExprKind::Num(rhs.inner.meta.lookup().size() as i128);
+                TirExpr::new(kind, ty)
+            }
         };
         Spanned::new(inner, span)
     }

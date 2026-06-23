@@ -58,4 +58,6 @@ pub enum Token {
     Gt,     // >
     LtEq,   // <=
     GtEq,   // >=
+
+    Sizeof, // sizeof
 }

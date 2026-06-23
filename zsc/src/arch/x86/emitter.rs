@@ -227,6 +227,9 @@ impl Emitter {
                     }
                     LirInstr::Udiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
                     LirInstr::Sdiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
+                    LirInstr::Trunc(ty, rd, rs1, rs2) => todo!(),
+                    LirInstr::Zext(ty, rd, rs1, rs2) => todo!(),
+                    LirInstr::Sext(ty, rd, rs1, rs2) => todo!(),
                 }
             }
         }

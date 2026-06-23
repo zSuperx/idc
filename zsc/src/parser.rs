@@ -219,6 +219,13 @@ impl Compiler {
         let span_start = self.mark();
         let tok = self.eat();
         let typed_expr = match tok.inner {
+            Token::Sizeof => {
+                self.expect(Token::LParen);
+                let rhs = Box::new(self.parse_expr());
+                self.expect(Token::RParen);
+                let kind = HirExprKind::SizeOf { rhs };
+                HirExpr::new(kind, ())
+            }
             Token::Ident(s) => {
                 let kind = HirExprKind::Ident(s);
                 HirExpr::new(kind, ())
@@ -372,7 +379,7 @@ impl Compiler {
 
 fn prefix_power(kind: Token) -> Option<f32> {
     let power = match kind {
-        Token::Bang | Token::Minus | Token::Star | Token::And | Token::At => 9.0,
+        Token::Sizeof | Token::Bang | Token::Minus | Token::Star | Token::And | Token::At => 9.0,
         _ => return None, // Not an prefix operator
     };
     Some(power)
@@ -499,6 +506,7 @@ impl Compiler {
             "return" => Token::Return,
             "true" => Token::Bool(true),
             "false" => Token::Bool(false),
+            "sizeof" => Token::Sizeof,
             _ => Token::Ident(add_str(raw)),
         };
 
@@ -595,6 +603,7 @@ impl Compiler {
             b">" => Gt,
             b"<=" => LtEq,
             b">=" => GtEq,
+            b"@" => At,
             x => die!(
                 "Unknown token: `{}` found near: {}",
                 str::from_utf8(x).unwrap(),
