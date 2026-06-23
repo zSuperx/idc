@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{arch::lir::LirVal, prelude::*};
+use crate::{arch::lir::*, prelude::*};
 
 use registry::Registry;
 

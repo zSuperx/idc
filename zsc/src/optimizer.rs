@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::arch::lir::LirVal;
+use crate::arch::lir::*;
 use crate::aux::Compiler;
 
 use crate::prelude::*;

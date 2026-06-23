@@ -20,5 +20,3 @@ pub use crate::die;
 
 use registry::Id;
 pub type StringId = Id<String>;
-
-pub use crate::autogen::*;

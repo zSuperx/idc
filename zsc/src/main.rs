@@ -15,7 +15,6 @@ use crate::{arch::x86, aux::Compiler};
 
 mod arch;
 mod ast;
-mod autogen;
 mod aux;
 mod checker;
 mod hir;

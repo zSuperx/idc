@@ -1,7 +1,6 @@
 use crate::{
     arch::lir::*,
     ast::*,
-    autogen::*,
     aux::{Compiler, SymbolInfo, SymbolKind},
     tir::*,
 };

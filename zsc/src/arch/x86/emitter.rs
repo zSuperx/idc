@@ -5,10 +5,8 @@
 // https://en.wikipedia.org/wiki/Live-variable_analysis
 use std::collections::HashMap;
 
-use crate::arch::lir::{LirType, LirVal, LirValKind};
+use crate::arch::lir::*;
 use crate::arch::x86::*;
-use crate::autogen::LirInstr;
-use crate::autogen::x86Instr;
 use crate::{CFG, prelude::*};
 
 use bitset::BitSet;
