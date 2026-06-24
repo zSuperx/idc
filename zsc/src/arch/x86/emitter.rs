@@ -11,7 +11,7 @@ use crate::ast::*;
 use crate::{CFG, prelude::*};
 
 use bitset::BitSet;
-use heuristic_graph_coloring::{VecVecGraph, color_greedy_by_degree};
+use heuristic_graph_coloring::{VecVecGraph, color_greedy_by_degree_with_precolor};
 use x86Instr::*;
 use x86ValKind::*;
 
@@ -33,19 +33,26 @@ impl Emitter {
     fn get_mem(&self, ty: &RealType, v: LirVal) -> x86Val {
         let ret = match v.kind {
             LirValKind::Reg(id) => {
-                self.v2p
-                    .get(&v)
-                    .copied()
-                    .unwrap_or(x86Val::mem(id + 16, 0, ty.size()))
+                // TODO: make this look not stupid
+                let mut maybe_reg =
+                    self.v2p
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(x86Val::mem(id + 16, 0, ty.size()));
+
+                if let Reg(reg) = maybe_reg.kind {
+                    maybe_reg.kind = Mem(reg, 0);
+                }
+                maybe_reg
             }
             LirValKind::Mem(reg) => self
                 .v2p
                 .get(&v)
                 .copied()
                 .expect("Could not find pointer in v2p map"),
-            // .unwrap_or(x86Val::mem(reg, 0, v.size)),
             LirValKind::Imm(_) => panic!("Resolve pointer called on immediate value"),
         };
+
         assert!(matches!(ret.kind, Mem(..)));
         ret
     }
@@ -385,18 +392,18 @@ impl Emitter {
             }
         }
 
+        let mut precoloring = vec![usize::MAX; total_regs];
         for i in 0..16 {
-            for j in i + 1..16 {
-                graph.add_edge(i, j);
+            precoloring[i] = i;
+        }
+        let coloring = color_greedy_by_degree_with_precolor(&graph, precoloring);
+        if CFG.verbose {
+            for (v, es) in graph.iter().enumerate() {
+                if v > 16 && !es.is_empty() {
+                    eprintln!("{v}: {es:?}");
+                }
             }
         }
-
-        let coloring = color_greedy_by_degree(&graph);
-        // if CFG.verbose {
-        //     for (v, es) in graph.iter().enumerate() {
-        //         eprintln!("{v}: {es:?}");
-        //     }
-        // }
 
         if CFG.no_regalloc {
             return;
@@ -407,13 +414,7 @@ impl Emitter {
                 for dst in i.dsts() {
                     match &mut dst.kind {
                         Reg(reg) | Mem(reg, _) => {
-                            // TODO: This is NOT how precoloring works. Fix it!!
-                            // True precoloring requires integration with the graph coloring
-                            // algorithm itself, meaning I either need to find a better crate to do
-                            // it for me, or fork it myself (likely).
-                            if *reg > 15 {
-                                *reg = coloring[*reg];
-                            }
+                            *reg = coloring[*reg];
                         }
                         _ => {}
                     }
@@ -422,10 +423,7 @@ impl Emitter {
                 for src in i.srcs() {
                     match &mut src.kind {
                         Reg(reg) | Mem(reg, _) => {
-                            // TODO: This is NOT how precoloring works. Fix it!!
-                            if *reg > 15 {
-                                *reg = coloring[*reg];
-                            }
+                            *reg = coloring[*reg];
                         }
                         _ => {}
                     }

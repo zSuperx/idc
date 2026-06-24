@@ -1,4 +1,5 @@
 use crate::{
+    CFG,
     arch::lir::*,
     ast::*,
     aux::{Compiler, SymbolInfo, SymbolKind},
@@ -90,9 +91,11 @@ impl Compiler {
         // TODO: Change this its kind of stupid. Span::content() should return just the source code
         // slice, whereas Span::to_string() should print the file:row:col, the content, and the
         // arrows
-        builder.emit(Comment(
-            stmt.span.content().split('\n').nth(3).unwrap().to_string(),
-        ));
+        if CFG.verbose {
+            builder.emit(Comment(
+                stmt.span.content().split('\n').nth(3).unwrap().to_string(),
+            ));
+        }
         match stmt.inner.kind {
             TirStmtKind::Let { ty, lhs, rhs } => {
                 let rs1 = self.func.var2val.get(&lhs.inner).copied().unwrap();

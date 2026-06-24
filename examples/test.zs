@@ -1,7 +1,6 @@
-fn main(argc: i32) -> i32 {
-  if argc == 1 {
-    return 69;
-  } else {
-    return sizeof(i32);
+fn main(argc: i32, argv: **u8) -> u8 {
+  if argc == 3 {
+    return **argv;
   }
+  return 0;
 }

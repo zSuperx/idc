@@ -196,8 +196,6 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "heuristic-graph-coloring"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49b668274fa5581eb527cef09a3e33028f8edee0faa6fa7853eff3271f0030f7"
 
 [[package]]
 name = "id-arena"

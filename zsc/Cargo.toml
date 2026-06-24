@@ -7,6 +7,6 @@ edition = "2024"
 bitset = { version = "0.1.0", path = "../bitset" }
 clap = { version = "4.6.1", features = ["derive"] }
 derived-deref = "2.1.0"
-heuristic-graph-coloring = "0.1.0"
+heuristic-graph-coloring = { path = "../heuristic-graph-coloring/" }
 registry = { path = "../registry/" }
 tempfile = "3.27.0"

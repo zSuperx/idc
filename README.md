@@ -6,14 +6,14 @@ These are just some goals I have for this compiler project. It's not in order
 and I haven't researched every goal yet. They're just things I want to do at
 some point.
 
-- [ ] Fix register precoloring:
-    - The current model just makes a clique between all physical registers and
-      hands that to the graph coloring algorithm. Then it just ignores the
-      colors assigned to the physical registers and uses the numbers `0 - 15`
-      instead. This is WRONG.
-    - True precoloring requires integration with the graph coloring algorithm
-      itself, meaning I either need to find a better crate to do it for me, or
-      fork it and do it myself (likely).
+- [ ] Improve parser API:
+    - Right now the parser will just `die!` if it encounters a token it didn't
+      expect. This should be replaced with `ParseError` behavior, so the parent
+      parser can try another production rule
+    - For example, I plan to make `sizeof` work for both expressions AND types.
+      This requires me to parse either an `expr` OR a `type` once I see a
+      `sizeof` token.
+
 
 - [ ] Get a better convergence algorithm for LIVE_{IN,OUT} set computation:
     - It can be vastly improved by popping items out of a worklist. When a
@@ -25,7 +25,7 @@ some point.
 
 - [ ] Type casting:
     - Possible syntax:
-        - `@i32(x)` / `@*i32(x)`
+        - `@i32(x)` / `@*i32(x)` <- this is what I'm doing right now
         - `@(x, i32)`
         - `cast(x, i32)`
         - `x as i32` (Rust) lame
@@ -100,6 +100,18 @@ some point.
       the type in `let` statements
     - But this should eventually be changed into type inference, likely via the
       Unification Algorithm
+
+- [ ] Improve register precoloring
+    - It sucks!
+
+- [x] Fix register precoloring:
+    - The current model just makes a clique between all physical registers and
+      hands that to the graph coloring algorithm. Then it just ignores the
+      colors assigned to the physical registers and uses the numbers `0 - 15`
+      instead. This is WRONG.
+    - True precoloring requires integration with the graph coloring algorithm
+      itself, meaning I either need to find a better crate to do it for me, or
+      fork it and do it myself (likely).
 
 
 _(Note: This list was created on 06/22/2026, so it may not have all goals)_
