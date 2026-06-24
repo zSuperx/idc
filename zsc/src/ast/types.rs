@@ -49,6 +49,22 @@ impl RealType {
         }
     }
 
+    pub fn is_primitive(&self) -> bool {
+        match self {
+            RealType::I8
+            | RealType::U8
+            | RealType::I16
+            | RealType::U16
+            | RealType::I32
+            | RealType::U32
+            | RealType::I64
+            | RealType::U64
+            | RealType::Bool
+            | RealType::Void => true,
+            _ => false,
+        }
+    }
+
     pub fn is_signed(&self) -> bool {
         match self {
             RealType::I8 | RealType::I16 | RealType::I32 | RealType::I64 => true,

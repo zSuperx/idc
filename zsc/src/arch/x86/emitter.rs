@@ -235,9 +235,16 @@ impl Emitter {
                     }
                     LirInstr::Udiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
                     LirInstr::Sdiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
-                    LirInstr::Trunc(ty, rd, rs1, rs2) => todo!(),
-                    LirInstr::Zext(ty, rd, rs1, rs2) => {}
-                    LirInstr::Sext(ty, rd, rs1, rs2) => todo!(),
+                    LirInstr::Trunc(ty, dst, rs1) => todo!(),
+                    LirInstr::Zext(ty, dst, rs1) => {
+                        let dst = self.get_val(ty.lookup(), dst, &mut builder);
+                        let rs1 = self.get_val(ty.lookup(), rs1, &mut builder);
+                        match ty.lookup().size() {
+                            8 | 16 => builder.emit(Movzx(dst, rs1)),
+                            _ => builder.emit(Mov(dst, rs1)),
+                        }
+                    }
+                    LirInstr::Sext(ty, rd, rs1) => todo!(),
                 }
             }
         }

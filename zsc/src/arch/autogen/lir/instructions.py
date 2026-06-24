@@ -3,6 +3,7 @@ from gen import *
 V = "LirVal"
 T = "TypeId"
 
+
 def binop(name: str):
     return InstrInfo(
         name=name,
@@ -29,9 +30,6 @@ INSTRUCTIONS = [
     binop("uge"),
     binop("ult"),
     binop("ule"),
-    binop("zext"),
-    binop("sext"),
-    binop("trunc"),
     InstrInfo("copy", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("alloc", [T, V, "StringId"], defs=[1], uses=[]),
     InstrInfo("arg", [T, V, "StringId", "usize"], defs=[1], uses=[]),
@@ -39,6 +37,9 @@ INSTRUCTIONS = [
     InstrInfo("load", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("store", [T, V, V], defs=[], uses=[1, 2]),
     InstrInfo("comment", ["String"], fmt="; {v0}"),
+    InstrInfo("sext", [T, V, V], uses=[2], defs=[1]),
+    InstrInfo("zext", [T, V, V], uses=[2], defs=[1]),
+    InstrInfo("trunc", [T, V, V], uses=[2], defs=[1]),
     # terminators
     InstrInfo("retv", is_terminator=True),
     InstrInfo("ret", [T, V], defs=[], uses=[1], is_terminator=True),

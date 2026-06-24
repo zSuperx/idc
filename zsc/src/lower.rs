@@ -270,15 +270,31 @@ impl Compiler {
             }
             TirExprKind::Call { callee, args } => todo!(),
             TirExprKind::Cast { target_ty, rhs } => {
-                let rhs_ty = rhs.inner.meta;
-                let rd = self.lower_expr(builder, *rhs);
-                if rhs_ty == target_ty.inner {
+                let ty = rhs.inner.meta;
+                let rhs = self.lower_expr(builder, *rhs);
+                if ty.lookup() == target_ty.inner.lookup() {
                     // @T(T) is a No-op
-                    rd
+                    rhs
                 } else {
-                    todo!()
+                    let rd = LirVal::reg(builder.new_reg(), target_ty.inner.lookup().size());
+                    if ty.lookup().is_primitive() {
+                        if ty.lookup().size() < target_ty.inner.lookup().size() {
+                            if target_ty.inner.lookup().is_signed() {
+                                builder.emit(Sext(target_ty.inner, rd, rhs));
+                            } else {
+                                builder.emit(Zext(target_ty.inner, rd, rhs));
+                            }
+                        } else {
+                            builder.emit(Trunc(target_ty.inner, rd, rhs));
+                        }
+                    } else {
+                        todo!()
+                    }
+                    rd
                 }
             }
+            // The size of a type is known at checking time, so the checker literally replaces
+            // ExprKind::SizeOf with Expr::Num, meaning this should never be hit
             TirExprKind::SizeOf { ty } => unreachable!(),
         }
     }

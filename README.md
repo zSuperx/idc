@@ -1,10 +1,12 @@
 # Still looking for a name
 
-# TODO
+# TODOs
 
 These are just some goals I have for this compiler project. It's not in order
 and I haven't researched every goal yet. They're just things I want to do at
 some point.
+
+## Unfinished/Planned:
 
 - [ ] Improve parser API:
     - Right now the parser will just `die!` if it encounters a token it didn't
@@ -13,7 +15,6 @@ some point.
     - For example, I plan to make `sizeof` work for both expressions AND types.
       This requires me to parse either an `expr` OR a `type` once I see a
       `sizeof` token.
-
 
 - [ ] Get a better convergence algorithm for LIVE_{IN,OUT} set computation:
     - It can be vastly improved by popping items out of a worklist. When a
@@ -103,6 +104,9 @@ some point.
 
 - [ ] Improve register precoloring
     - It sucks!
+
+
+## Finished
 
 - [x] Fix register precoloring:
     - The current model just makes a clique between all physical registers and

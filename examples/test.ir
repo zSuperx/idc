@@ -1,0 +1,33 @@
+section .text
+global main
+main:
+.L0.entry:
+    arg **u8, %0, argv.1, 1
+    arg i32, %1, argc.0, 0
+    jmp .L1.body
+.L1.body:
+    jmp .L2.if
+.L2.if:
+    eq bool, %2, %1, 1
+    br i8, %2, .L3.then, .L4.else
+.L3.then:
+    ret u32, 0
+.L4.else:
+    jmp .L6.if
+.L6.if:
+    eq bool, %6, %1, 2
+    br i8, %6, .L7.then, .L8.else
+.L7.then:
+    add u32, %9, 4, 5
+    ret u32, %9
+.L8.else:
+    jmp .L10.if
+.L10.if:
+    eq bool, %12, %1, 3
+    br i8, %12, .L11.then, .L12.else
+.L11.then:
+    load *u8, %17, %0
+    zext u32, %19, %16
+    ret u32, %19
+.L12.else:
+    ret u32, 69

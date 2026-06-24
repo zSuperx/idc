@@ -37,6 +37,9 @@ INSTRUCTIONS = [
     binop("lea"),
     #
     move("mov"),
+    move("movzx"),
+    move("movsx"),
+    move("movsxd"),
     move("cmove"),
     move("cmovne"),
     move("cmovl"),
