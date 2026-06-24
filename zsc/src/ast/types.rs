@@ -3,7 +3,17 @@ use std::hash::Hash;
 use registry::*;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
-pub enum TirType {
+pub enum RawType {
+    Named(&'static str),
+    Pointer(Box<RawType>),
+    Function {
+        args: Vec<RawType>,
+        returns: Box<RawType>,
+    },
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+pub enum RealType {
     // Primitive types
     I8,
     I16,
@@ -24,31 +34,31 @@ pub enum TirType {
     Pointer(TypeId),
 }
 
-impl TirType {
+impl RealType {
     pub fn is_integral(&self) -> bool {
         match self {
-            TirType::I8
-            | TirType::U8
-            | TirType::I16
-            | TirType::U16
-            | TirType::I32
-            | TirType::U32
-            | TirType::I64
-            | TirType::U64 => true,
+            RealType::I8
+            | RealType::U8
+            | RealType::I16
+            | RealType::U16
+            | RealType::I32
+            | RealType::U32
+            | RealType::I64
+            | RealType::U64 => true,
             _ => false,
         }
     }
 
     pub fn is_signed(&self) -> bool {
         match self {
-            TirType::I8 | TirType::I16 | TirType::I32 | TirType::I64 => true,
+            RealType::I8 | RealType::I16 | RealType::I32 | RealType::I64 => true,
             _ => false,
         }
     }
 
     pub fn alignment(&self) -> usize {
         match self {
-            TirType::Base(_) => todo!(),
+            RealType::Base(_) => todo!(),
             // Function types are coerced to pointers
             x => x.size(),
         }
@@ -56,24 +66,24 @@ impl TirType {
 
     pub fn size(&self) -> usize {
         match self {
-            TirType::I8 | TirType::U8 => 1,
-            TirType::I16 | TirType::U16 => 2,
-            TirType::I32 | TirType::U32 => 4,
-            TirType::I64 | TirType::U64 => 8,
-            TirType::Bool => 1,
-            TirType::Void => 0,
-            TirType::Base(_) => todo!(),
-            TirType::Function { args, returns } => 8,
-            TirType::Pointer(_) => 8,
+            RealType::I8 | RealType::U8 => 1,
+            RealType::I16 | RealType::U16 => 2,
+            RealType::I32 | RealType::U32 => 4,
+            RealType::I64 | RealType::U64 => 8,
+            RealType::Bool => 1,
+            RealType::Void => 0,
+            RealType::Base(_) => todo!(),
+            RealType::Function { args, returns } => 8,
+            RealType::Pointer(_) => 8,
         }
     }
 }
 
-impl std::fmt::Display for TirType {
+impl std::fmt::Display for RealType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            TirType::Base(s) => format_args!("{}", *s),
-            TirType::Function { args, returns } => {
+            RealType::Base(s) => format_args!("{}", *s),
+            RealType::Function { args, returns } => {
                 format_args!(
                     "Fn({}) -> {}",
                     args.iter()
@@ -83,11 +93,11 @@ impl std::fmt::Display for TirType {
                     *returns
                 )
             }
-            TirType::Pointer(type_id) => format_args!("*{}", *type_id),
+            RealType::Pointer(type_id) => format_args!("*{}", *type_id),
             x => format_args!("{}", format!("{x:?}").to_lowercase()),
         };
         f.write_fmt(s)
     }
 }
 
-pub type TypeId = Id<TirType>;
+pub type TypeId = Id<RealType>;

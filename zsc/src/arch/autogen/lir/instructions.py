@@ -1,7 +1,7 @@
 from gen import *
 
 V = "LirVal"
-T = "LirType"
+T = "TypeId"
 
 def binop(name: str):
     return InstrInfo(

@@ -61,7 +61,7 @@ impl Compiler {
             }
             Token::LCurly => {
                 let span_start = self.mark();
-                let ty = HirType::Named(add_str("void"));
+                let ty = RawType::Named(add_str("void"));
                 self.commit(ty, span_start)
             }
             _ => die!("Expected return type or function body, found {peeked}"),
@@ -79,15 +79,15 @@ impl Compiler {
         self.commit(obj, span_start)
     }
 
-    fn parse_type(&mut self) -> Spanned<HirType> {
+    fn parse_type(&mut self) -> Spanned<RawType> {
         let span_start = self.mark();
         let tok = self.peek();
         let ty = match tok.inner {
             Token::Star => {
                 self.expect(Token::Star);
-                HirType::Pointer(Box::new(self.parse_type().inner))
+                RawType::Pointer(Box::new(self.parse_type().inner))
             }
-            _ => HirType::Named(self.expect_ident()),
+            _ => RawType::Named(self.expect_ident()),
         };
 
         self.commit(ty, span_start)
@@ -221,9 +221,9 @@ impl Compiler {
         let typed_expr = match tok.inner {
             Token::Sizeof => {
                 self.expect(Token::LParen);
-                let rhs = Box::new(self.parse_expr());
+                let ty = self.parse_type();
                 self.expect(Token::RParen);
-                let kind = HirExprKind::SizeOf { rhs };
+                let kind = HirExprKind::SizeOf { ty };
                 HirExpr::new(kind, ())
             }
             Token::Ident(s) => {

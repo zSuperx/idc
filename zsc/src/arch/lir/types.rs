@@ -1,4 +1,4 @@
-use crate::tir::{TirType, TypeId};
+use crate::ast::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LirType {
@@ -25,18 +25,18 @@ impl LirType {
     }
 }
 
-impl From<&TirType> for LirType {
-    fn from(value: &TirType) -> Self {
+impl From<&RealType> for LirType {
+    fn from(value: &RealType) -> Self {
         match value {
-            TirType::I8 | TirType::U8 => LirType::I8,
-            TirType::I16 | TirType::U16 => LirType::I16,
-            TirType::I32 | TirType::U32 => LirType::I32,
-            TirType::I64 | TirType::U64 => LirType::I64,
-            TirType::Pointer(id) => LirType::Ptr,
-            TirType::Function { args, returns } => LirType::Ptr,
-            TirType::Bool => LirType::I8,
-            TirType::Void => panic!("Can't actually compile void type"),
-            TirType::Base(_) => todo!(),
+            RealType::I8 | RealType::U8 => LirType::I8,
+            RealType::I16 | RealType::U16 => LirType::I16,
+            RealType::I32 | RealType::U32 => LirType::I32,
+            RealType::I64 | RealType::U64 => LirType::I64,
+            RealType::Pointer(id) => LirType::Ptr,
+            RealType::Function { args, returns } => LirType::Ptr,
+            RealType::Bool => LirType::I8,
+            RealType::Void => panic!("Can't actually compile void type"),
+            RealType::Base(_) => todo!(),
         }
     }
 }

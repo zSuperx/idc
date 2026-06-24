@@ -44,13 +44,13 @@ impl<I: Clone + Instr> Builder<I> {
         s
     }
 
-    pub fn next_reg(&mut self) -> usize {
+    pub fn new_reg(&mut self) -> usize {
         let id = self.vreg_count;
         self.vreg_count += 1;
         id
     }
 
-    pub fn next_bb(&mut self, name: &'static str) -> BB {
+    pub fn new_bb(&mut self, name: &'static str) -> BB {
         self.bb_count += 1;
         BB(self.bb_count - 1, name)
     }

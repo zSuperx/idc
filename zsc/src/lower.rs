@@ -19,7 +19,7 @@ impl Compiler {
                 body,
             } => {
                 let mut builder = Builder::new(self.func.raw_name.inner, 0, 0);
-                let entry_bb = builder.next_bb("entry");
+                let entry_bb = builder.new_bb("entry");
                 builder.start_new_block(entry_bb);
                 let symbol_table = std::mem::take(&mut self.func.symbol_table);
                 for (name, info) in symbol_table.iter() {
@@ -31,17 +31,17 @@ impl Compiler {
                     } = *info;
                     match kind {
                         SymbolKind::Local => {
-                            let dst = LirVal::mem(builder.next_reg(), ty.lookup().size());
+                            let dst = LirVal::mem(builder.new_reg(), ty.lookup().size());
                             builder.emit(Alloc(ty.into(), dst, name));
                             self.func.var2val.insert(name, dst);
                         }
                         SymbolKind::Param(num) => {
                             if address_taken {
-                                let dst = LirVal::mem(builder.next_reg(), ty.lookup().size());
+                                let dst = LirVal::mem(builder.new_reg(), ty.lookup().size());
                                 builder.emit(Stkarg(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             } else {
-                                let dst = LirVal::reg(builder.next_reg(), ty.lookup().size());
+                                let dst = LirVal::reg(builder.new_reg(), ty.lookup().size());
                                 builder.emit(Arg(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             }
@@ -51,13 +51,13 @@ impl Compiler {
                     }
                 }
 
-                let body_bb = builder.next_bb("body");
+                let body_bb = builder.new_bb("body");
                 builder.start_new_block(body_bb);
                 self.lower_stmt(&mut builder, *body);
 
                 if builder.get_terminator().is_none() {
                     match returns.inner.lookup() {
-                        TirType::Void => builder.buf.push(Retv),
+                        RealType::Void => builder.buf.push(Retv),
                         _ => die!(
                             "Control flow reaches the end of a function that was expected to return {returns}"
                         ),
@@ -65,7 +65,7 @@ impl Compiler {
                 }
 
                 // This is done just to flush any instructions in the Basic Block buffer
-                let exit_bb = builder.next_bb("");
+                let exit_bb = builder.new_bb("");
                 builder.start_new_block(exit_bb);
 
                 // Do a final loop to compute each blocks' successors from its terminator
@@ -99,7 +99,7 @@ impl Compiler {
                 let LirValKind::Mem(..) = rs1.kind else {
                     die!("Local variable must be an alloca'd pointer");
                 };
-                let ty = rhs.inner.meta.into();
+                let ty = rhs.inner.meta;
                 let rs2 = self.lower_expr(builder, rhs);
                 builder.emit(Store(ty, rs1, rs2));
             }
@@ -108,15 +108,20 @@ impl Compiler {
             TirStmtKind::Break => todo!(),
             TirStmtKind::If { cond, then_, else_ } => {
                 // Create labels
-                let if_bb = builder.next_bb("if");
-                let then_bb = builder.next_bb("then");
-                let else_bb = builder.next_bb("else");
-                let end_bb = builder.next_bb("endif");
+                let if_bb = builder.new_bb("if");
+                let then_bb = builder.new_bb("then");
+                let else_bb = builder.new_bb("else");
+                let end_bb = builder.new_bb("endif");
 
                 // IF BB
                 builder.start_new_block(if_bb);
                 let cond_val = self.lower_expr(builder, cond);
-                let branch = Br(LirType::I8, cond_val, then_bb, else_bb);
+                let branch = Br(
+                    self.known_types.add(RealType::I8),
+                    cond_val,
+                    then_bb,
+                    else_bb,
+                );
                 builder.emit(branch);
 
                 // THEN BB
@@ -140,10 +145,10 @@ impl Compiler {
                 }
             }
             TirStmtKind::Return(spanned) => {
-                if *spanned.inner.meta.lookup() == TirType::Void {
+                if *spanned.inner.meta.lookup() == RealType::Void {
                     builder.emit(Retv);
                 } else {
-                    let ty: LirType = spanned.inner.meta.into();
+                    let ty = spanned.inner.meta;
                     let rs1 = self.lower_expr(builder, spanned);
                     builder.emit(Ret(ty, rs1));
                 }
@@ -160,9 +165,9 @@ impl Compiler {
     }
 
     fn lower_expr(&mut self, builder: &mut Builder<LirInstr>, expr: Spanned<TirExpr>) -> LirVal {
-        let ty: LirType = expr.inner.meta.into();
-        let size = ty.size();
-        let dst = LirVal::reg(builder.next_reg(), size);
+        let ty = expr.inner.meta;
+        let size = ty.lookup().size();
+        let dst = LirVal::reg(builder.new_reg(), size);
         match expr.inner.kind {
             TirExprKind::Void => dst,
             TirExprKind::Num(imm) => LirVal::imm(imm, size),
@@ -261,8 +266,17 @@ impl Compiler {
                 rs1
             }
             TirExprKind::Call { callee, args } => todo!(),
-            TirExprKind::Cast { target_ty, rhs } => todo!(),
-            TirExprKind::SizeOf { rhs } => unreachable!(),
+            TirExprKind::Cast { target_ty, rhs } => {
+                let rhs_ty = rhs.inner.meta;
+                let rd = self.lower_expr(builder, *rhs);
+                if rhs_ty == target_ty.inner {
+                    // @T(T) is a No-op
+                    rd
+                } else {
+                    todo!()
+                }
+            }
+            TirExprKind::SizeOf { ty } => unreachable!(),
         }
     }
 }

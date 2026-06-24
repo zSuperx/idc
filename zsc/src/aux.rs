@@ -6,7 +6,6 @@ use registry::Registry;
 
 use crate::{
     ast::*,
-    tir::{TirType, TypeId},
 };
 
 #[derive(Default)]
@@ -24,8 +23,8 @@ pub struct Compiler {
 
     pub symbols: Registry<String>, // Uniquely ID'd scoped identifiers
     pub var_count: usize,          // Distinguishes shadowed vars
-    pub known_types: Registry<TirType>, // Uniquely ID'd types.
-    pub builtin_types: HashMap<&'static str, TirType>,
+    pub known_types: Registry<RealType>, // Uniquely ID'd types.
+    pub builtin_types: HashMap<&'static str, RealType>,
 
     // Lowering shit
     pub bb_count: usize,
@@ -37,11 +36,11 @@ impl Compiler {
 
         #[rustfmt::skip]
         let builtin_types = [
-            TirType::I8,   TirType::U8,
-            TirType::I16,  TirType::U16,
-            TirType::I32,  TirType::U32,
-            TirType::I64,  TirType::U64,
-            TirType::Bool, TirType::Void
+            RealType::I8,   RealType::U8,
+            RealType::I16,  RealType::U16,
+            RealType::I32,  RealType::U32,
+            RealType::I64,  RealType::U64,
+            RealType::Bool, RealType::Void
         ];
 
         for ty in builtin_types {

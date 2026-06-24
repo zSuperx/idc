@@ -1,9 +1,8 @@
 use crate::aux::{SymbolInfo, SymbolKind};
-use crate::hir::HirType;
 use crate::hir::*;
 use crate::prelude::*;
 use crate::tir::*;
-use crate::{ast::*, aux::Compiler, tir::TypeId};
+use crate::{ast::*, aux::Compiler};
 
 impl Compiler {
     fn next_var(&mut self, argname: &str) -> StringId {
@@ -12,12 +11,12 @@ impl Compiler {
         self.symbols.add(format!("{argname}.{id}"))
     }
 
-    fn check_type(&mut self, ty: Spanned<HirType>) -> Spanned<TypeId> {
+    fn check_type(&mut self, ty: Spanned<RawType>) -> Spanned<TypeId> {
         let id = match ty.inner {
-            HirType::Named(name) => {
+            RawType::Named(name) => {
                 let tir_ty = match self.builtin_types.get(name) {
                     Some(s) => s,
-                    None => &TirType::Base(name),
+                    None => &RealType::Base(name),
                 };
                 if let Some(t) = self.known_types.get(tir_ty) {
                     t
@@ -25,16 +24,16 @@ impl Compiler {
                     die!("Unknown type: {ty}");
                 }
             }
-            HirType::Pointer(p) => {
+            RawType::Pointer(p) => {
                 let inner = self.check_type(Spanned::new(*p, ty.span));
-                self.known_types.add(TirType::Pointer(inner.inner))
+                self.known_types.add(RealType::Pointer(inner.inner))
             }
-            HirType::Function { args, returns } => {
+            RawType::Function { args, returns } => {
                 let args = args
                     .into_iter()
                     .map(|a| {
                         let arg_ty = self.check_type(Spanned::new(a, ty.span));
-                        if *arg_ty.inner.lookup() == TirType::Void {
+                        if *arg_ty.inner.lookup() == RealType::Void {
                             die!("Argument cannot have type `void`: {arg_ty}")
                         }
                         println!("{arg_ty}");
@@ -42,7 +41,7 @@ impl Compiler {
                     })
                     .collect();
                 let returns = self.check_type(Spanned::new(*returns, ty.span)).inner;
-                self.known_types.add(TirType::Function { args, returns })
+                self.known_types.add(RealType::Function { args, returns })
             }
         };
         Spanned::new(id, ty.span)
@@ -64,7 +63,7 @@ impl Compiler {
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
                     let var_id = argname.map(|name| self.next_var(*name));
                     let var_ty = self.check_type(ty);
-                    if *var_ty.inner.lookup() == TirType::Void {
+                    if *var_ty.inner.lookup() == RealType::Void {
                         die!("Function argument cannot have type {var_ty}");
                     }
                     self.func.symbol_table.insert(
@@ -93,7 +92,7 @@ impl Compiler {
 
                 let body = Box::new(self.check_stmt(*body));
                 self.func.env.pop_scope();
-                let ty = TirType::Function {
+                let ty = RealType::Function {
                     args: arg_types,
                     returns: returns.inner,
                 };
@@ -154,10 +153,10 @@ impl Compiler {
             HirStmtKind::If { cond, then_, else_ } => {
                 let cond = self.check_expr(cond, None);
                 let cond_ty = cond.inner.meta.lookup();
-                if *cond_ty != TirType::Bool {
+                if *cond_ty != RealType::Bool {
                     die!(
                         "Type mismatch. Expected `{}` but got `{}`: {}",
-                        TirType::Bool,
+                        RealType::Bool,
                         cond_ty,
                         cond.span
                     )
@@ -190,7 +189,7 @@ impl Compiler {
             }
         };
         // All statements have type void
-        let ty = self.known_types.add(TirType::Void);
+        let ty = self.known_types.add(RealType::Void);
         let inner = TirStmt::new(kind, ty);
         // Inherit the same span from the previous phase
         Spanned::new(inner, span)
@@ -204,7 +203,7 @@ impl Compiler {
         let inner = match inner.kind {
             HirExprKind::Void => {
                 let kind = TirExprKind::Void;
-                TirExpr::new(kind, self.known_types.add(TirType::Void))
+                TirExpr::new(kind, self.known_types.add(RealType::Void))
             }
             HirExprKind::Num(int_str) => {
                 let ty = match hint {
@@ -213,20 +212,20 @@ impl Compiler {
                         if hint_ty.is_integral() {
                             hint_id
                         } else {
-                            self.known_types.add(TirType::I32)
+                            self.known_types.add(RealType::I32)
                         }
                     }
-                    None => self.known_types.add(TirType::I32),
+                    None => self.known_types.add(RealType::I32),
                 };
                 let result = match ty.lookup() {
-                    TirType::I8 => int_str.parse::<i8>().map(|i| i as i128),
-                    TirType::U8 => int_str.parse::<u8>().map(|i| i as i128),
-                    TirType::I16 => int_str.parse::<i16>().map(|i| i as i128),
-                    TirType::U16 => int_str.parse::<u16>().map(|i| i as i128),
-                    TirType::I32 => int_str.parse::<i32>().map(|i| i as i128),
-                    TirType::U32 => int_str.parse::<u32>().map(|i| i as i128),
-                    TirType::I64 => int_str.parse::<i64>().map(|i| i as i128),
-                    TirType::U64 => int_str.parse::<u64>().map(|i| i as i128),
+                    RealType::I8 => int_str.parse::<i8>().map(|i| i as i128),
+                    RealType::U8 => int_str.parse::<u8>().map(|i| i as i128),
+                    RealType::I16 => int_str.parse::<i16>().map(|i| i as i128),
+                    RealType::U16 => int_str.parse::<u16>().map(|i| i as i128),
+                    RealType::I32 => int_str.parse::<i32>().map(|i| i as i128),
+                    RealType::U32 => int_str.parse::<u32>().map(|i| i as i128),
+                    RealType::I64 => int_str.parse::<i64>().map(|i| i as i128),
+                    RealType::U64 => int_str.parse::<u64>().map(|i| i as i128),
                     _ => {
                         die!("`{int_str}` could not be parsed as a {ty}");
                     }
@@ -238,7 +237,7 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExprKind::Bool(b) => {
-                let ty = self.known_types.add(TirType::Bool);
+                let ty = self.known_types.add(RealType::Bool);
                 let kind = TirExprKind::Bool(b);
                 TirExpr::new(kind, ty)
             }
@@ -274,7 +273,7 @@ impl Compiler {
             HirExprKind::Deref { rhs } => {
                 // If we get a hint of *T, the sub-expr should be checked with hint T
                 let hint_inner = hint.and_then(|h| match h.lookup() {
-                    TirType::Pointer(id) => Some(*id),
+                    RealType::Pointer(id) => Some(*id),
                     _ => None,
                 });
                 // We don't want to check the inner expression yet. First check its kind
@@ -289,7 +288,7 @@ impl Compiler {
                         // A deref can only happen on a pointer, and its type will be whatever
                         // the pointer is pointing to
                         let ty = match checked_ty.lookup() {
-                            TirType::Pointer(id) => *id,
+                            RealType::Pointer(id) => *id,
                             _ => die!(
                                 "Cannot dereference non-pointer type `{checked_ty}`: {checked_rhs}"
                             ),
@@ -313,7 +312,7 @@ impl Compiler {
                         };
 
                         // Given &x, where x: T, &x has type *T
-                        let ty = self.known_types.add(TirType::Pointer(rhs_ty));
+                        let ty = self.known_types.add(RealType::Pointer(rhs_ty));
 
                         // Mark this symbol as address-taken
                         let Some(info) = self.func.symbol_table.get_mut(&varname) else {
@@ -348,7 +347,7 @@ impl Compiler {
                 let rhs_ty = checked_rhs.inner.meta;
                 let ty = match op {
                     UnOp::Not => {
-                        if *(rhs_ty.lookup()) != TirType::Bool {
+                        if *(rhs_ty.lookup()) != RealType::Bool {
                             die!("Cannot logical not a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
@@ -400,13 +399,13 @@ impl Compiler {
                         if lhs_ty != rhs_ty {
                             die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
-                        self.known_types.add(TirType::Bool)
+                        self.known_types.add(RealType::Bool)
                     }
                     BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
                             die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
-                        self.known_types.add(TirType::Bool)
+                        self.known_types.add(RealType::Bool)
                     }
                 };
                 let kind = TirExprKind::Bin {
@@ -417,10 +416,9 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExprKind::Call { callee, args } => todo!(),
-            HirExprKind::SizeOf { rhs } => {
-                let rhs = self.check_expr(*rhs, None);
-                let ty = rhs.inner.meta;
-                let kind = TirExprKind::Num(rhs.inner.meta.lookup().size() as i128);
+            HirExprKind::SizeOf { ty } => {
+                let ty = self.check_type(ty).inner;
+                let kind = TirExprKind::Num(ty.lookup().size() as i128);
                 TirExpr::new(kind, ty)
             }
         };
