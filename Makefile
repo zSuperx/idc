@@ -4,14 +4,14 @@ default:
 runtime/rt.o: runtime/rt.s
 	nasm -felf64 runtime/rt.s -o runtime/rt.o
 
-%.s: %.wc
-	cargo r -- $*.zl -c
+%.s: %.idc
+	cargo r -- $*.idc -S
 
 %.o: %.s
 	nasm -felf64 $*.s -o $*.o
 
-%: runtime/rt.o %.o
-	mold $*.o runtime/rt.o -o $*
+examples/%: runtime/rt.o examples/%.o
+	mold runtime/rt.o examples/$*.o -o examples/$*
 
 
 .PHONY: clean

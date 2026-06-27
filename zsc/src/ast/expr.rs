@@ -25,11 +25,18 @@ pub enum ExprKind<M, N, T, I> {
     AddrOf {
         rhs: Box<Spanned<Expr<M, N, T, I>>>,
     },
-    SizeOf {
+    SizeOfTy {
         ty: Spanned<T>,
+    },
+    SizeOfExpr {
+        expr: Box<Spanned<Expr<M, N, T, I>>>,
     },
     Deref {
         rhs: Box<Spanned<Expr<M, N, T, I>>>,
+    },
+    Index {
+        expr: Box<Spanned<Expr<M, N, T, I>>>,
+        index: Box<Spanned<Expr<M, N, T, I>>>,
     },
     Un {
         op: UnOp,

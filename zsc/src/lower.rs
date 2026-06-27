@@ -39,11 +39,11 @@ impl Compiler {
                         SymbolKind::Param(num) => {
                             if address_taken {
                                 let dst = LirVal::mem(builder.new_reg(), ty.lookup().size());
-                                builder.emit(Stkarg(ty.into(), dst, name, num));
+                                builder.emit(Sparam(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             } else {
                                 let dst = LirVal::reg(builder.new_reg(), ty.lookup().size());
-                                builder.emit(Arg(ty.into(), dst, name, num));
+                                builder.emit(Param(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             }
                         }
@@ -272,30 +272,32 @@ impl Compiler {
             TirExprKind::Cast { target_ty, rhs } => {
                 let ty = rhs.inner.meta;
                 let rhs = self.lower_expr(builder, *rhs);
-                if ty.lookup() == target_ty.inner.lookup() {
+                if ty.lookup().size() == target_ty.inner.lookup().size() {
                     // @T(T) is a No-op
                     rhs
                 } else {
-                    let rd = LirVal::reg(builder.new_reg(), target_ty.inner.lookup().size());
                     if ty.lookup().is_primitive() {
                         if ty.lookup().size() < target_ty.inner.lookup().size() {
                             if target_ty.inner.lookup().is_signed() {
-                                builder.emit(Sext(target_ty.inner, rd, rhs));
+                                builder.emit(Sext(target_ty.inner, dst, rhs));
                             } else {
-                                builder.emit(Zext(target_ty.inner, rd, rhs));
+                                builder.emit(Zext(target_ty.inner, dst, rhs));
                             }
                         } else {
-                            builder.emit(Trunc(target_ty.inner, rd, rhs));
+                            builder.emit(Trunc(target_ty.inner, dst, rhs));
                         }
                     } else {
                         todo!()
                     }
-                    rd
+                    dst
                 }
+            }
+            TirExprKind::Index { expr, index } => {
+                todo!()
             }
             // The size of a type is known at checking time, so the checker literally replaces
             // ExprKind::SizeOf with Expr::Num, meaning this should never be hit
-            TirExprKind::SizeOf { ty } => unreachable!(),
+            TirExprKind::SizeOfTy { .. } | TirExprKind::SizeOfExpr { .. } => unreachable!(),
         }
     }
 }

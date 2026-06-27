@@ -34,6 +34,15 @@ impl Compiler {
                         map.insert(*dst, imm);
                     }
                 }
+                op @ (Trunc(ty, dst, rs1) | Zext(ty, dst, rs1) | Sext(ty, dst, rs1)) => {
+                    let v1 = map.get(&rs1).copied();
+                    if let Some(imm) = v1 {
+                        map.insert(*dst, imm);
+                    }
+                    if let LirValKind::Imm(imm) = rs1.kind {
+                        map.insert(*dst, imm);
+                    }
+                }
                 op @ (Add(_, dst, rs1, rs2)
                 | Sub(_, dst, rs1, rs2)
                 | Smul(_, dst, rs1, rs2)
@@ -81,60 +90,33 @@ impl Compiler {
     }
 
     /// This pass should simply mark which registers are read from
-    fn track_live_code(&mut self, bb: &BasicBlock<LirInstr>, is_read: &mut HashSet<LirVal>) {
-        for instr in bb.instructions.iter() {
-            match *instr {
-                Ret(_, rs1) | Br(_, rs1, ..) | Copy(_, _, rs1) | Load(_, _, rs1) => {
-                    is_read.insert(rs1);
-                }
-                Add(_, _, rs1, rs2)
-                | Sub(_, _, rs1, rs2)
-                | Smul(_, _, rs1, rs2)
-                | Umul(_, _, rs1, rs2)
-                | Eq(_, _, rs1, rs2)
-                | Sgt(_, _, rs1, rs2)
-                | Sge(_, _, rs1, rs2)
-                | Slt(_, _, rs1, rs2)
-                | Sle(_, _, rs1, rs2)
-                | Ugt(_, _, rs1, rs2)
-                | Uge(_, _, rs1, rs2)
-                | Ult(_, _, rs1, rs2)
-                | Ule(_, _, rs1, rs2)
-                | Store(_, rs1, rs2) => {
-                    is_read.insert(rs1);
-                    is_read.insert(rs2);
-                }
-                _ => {}
+    fn track_live_code(&mut self, bb: &mut BasicBlock<LirInstr>, is_read: &mut HashSet<LirVal>) {
+        for instr in bb.instructions.iter_mut() {
+            for src in instr.srcs() {
+                is_read.insert(*src);
             }
         }
     }
 
     // This pass should look at all instructions who PRODUCE a value. If that value is read, it is
-    // considered a useful instructions
+    // considered a useful instructions, otherwise it's dead code
     fn dead_code_elim(&mut self, bb: &mut BasicBlock<LirInstr>, is_read: &HashSet<LirVal>) {
         let old = std::mem::take(&mut bb.instructions);
-        for instr in old {
-            match instr {
-                Copy(_, dst, ..)
-                | Add(_, dst, ..)
-                | Sub(_, dst, ..)
-                | Smul(_, dst, ..)
-                | Umul(_, dst, ..)
-                | Eq(_, dst, ..)
-                | Sgt(_, dst, ..)
-                | Sge(_, dst, ..)
-                | Slt(_, dst, ..)
-                | Sle(_, dst, ..)
-                | Ugt(_, dst, ..)
-                | Uge(_, dst, ..)
-                | Ult(_, dst, ..)
-                | Ule(_, dst, ..)
-                | Load(_, dst, ..) => {
+        for mut instr in old {
+            let mut keep = false;
+            if instr.is_terminator() || matches!(instr, Store(..) | Comment(..)) {
+                keep = true;
+            } else {
+                for dst in instr.dsts() {
                     if is_read.contains(&dst) {
-                        bb.instructions.push(instr);
+                        keep = true;
+                        break;
                     }
                 }
-                _ => bb.instructions.push(instr),
+            }
+
+            if keep {
+                bb.instructions.push(instr);
             }
         }
     }

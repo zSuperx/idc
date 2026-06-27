@@ -13,13 +13,17 @@ impl<T> Spanned<T> {
         Self { inner, span }
     }
 
-    /// Maps the inner `T` to a `U` using function `F(&T) -> U` and 
+    /// Maps the inner `T` to a `U` using function `F(&T) -> U` and
     /// returns a new `Spanned<U>` that inherits the `span` from `self`.
     pub fn map<U, F>(&self, mut f: F) -> Spanned<U>
     where
         F: FnMut(&T) -> U,
     {
         Spanned::new(f(&self.inner), self.span)
+    }
+
+    pub fn source_string(&self) -> &'static str {
+        str::from_utf8(&source()[self.span.lo..self.span.hi]).unwrap()
     }
 }
 
@@ -99,7 +103,7 @@ impl std::fmt::Display for Span {
 
 impl<T: std::fmt::Debug> std::fmt::Display for Spanned<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let raw = str::from_utf8(&source()[self.span.lo..self.span.hi]).unwrap();
+        let raw = self.source_string();
         f.write_fmt(format_args!("`{raw}`: {}", self.span))
     }
 }

@@ -30,10 +30,12 @@ INSTRUCTIONS = [
     binop("uge"),
     binop("ult"),
     binop("ule"),
+    InstrInfo("arg", [T, V, "usize"], defs=[], uses=[1]),
+    InstrInfo("call", [T, V], defs=[1], uses=[]),
     InstrInfo("copy", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("alloc", [T, V, "StringId"], defs=[1], uses=[]),
-    InstrInfo("arg", [T, V, "StringId", "usize"], defs=[1], uses=[]),
-    InstrInfo("stkarg", [T, V, "StringId", "usize"], defs=[1], uses=[]),
+    InstrInfo("param", [T, V, "StringId", "usize"], defs=[1], uses=[]),
+    InstrInfo("sparam", [T, V, "StringId", "usize"], defs=[1], uses=[]),
     InstrInfo("load", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("store", [T, V, V], defs=[], uses=[1, 2]),
     InstrInfo("comment", ["String"], fmt="; {v0}"),
@@ -46,6 +48,13 @@ INSTRUCTIONS = [
     InstrInfo("br", [T, V, "BB", "BB"], defs=[], uses=[1], is_terminator=True),
     jmp := InstrInfo("jmp", ["BB"], is_terminator=True),
 ]
+
+# LirInstr:
+# load ty, dst, (base + offset * scale + imm)
+# base = Reg
+# offset = Option<Reg>
+# scale = usize
+# imm = i128
 
 
 iclass = Arch(name="lir", enum="LirInstr", val=V, instrs=INSTRUCTIONS, uncond_jump=jmp)

@@ -16,6 +16,17 @@ some point.
       This requires me to parse either an `expr` OR a `type` once I see a
       `sizeof` token.
 
+- [ ] Change LirVal::Mem (and x86Val::Mem) to include compex addressing modes
+      - DONT lower Expr::Index to (Deref + Add + Mul) subexpr, as a lot
+      of information ends up getting lost 
+      - Instead, change the LirVal::Mem API to include base `Reg`, offset `Option<Reg>`,
+        scale `usize` and displacement `usize`
+        - For types, scale and disp can get away with being unwrapped values
+          since the values `1` and `0` can be used to represent their absence
+      - This is in hopes of emitting a physical instruction like [rbx + rax * 8 + 1]
+
+- [ ] Look into (ab)using `lea` for math!
+
 - [ ] Get a better convergence algorithm for LIVE_{IN,OUT} set computation:
     - It can be vastly improved by popping items out of a worklist. When a
       basic block sees its LIVE sets change, it should push its predecessors
@@ -23,6 +34,12 @@ some point.
     - The issue is that there is currently no way to find a basic block's
       predecessors. This is a TODO for when that API gets overhauled. For now,
       it just loops forever until convergence.
+
+- [ ] Add peephole optimizations to `optimizer.rs`
+    - These opts should happen at the LIR level so the backend emitter is
+      dealing with the simplest code possible
+    - Of course, peephole opts should also happen on the backend MLIR, but
+      performing it on LIR should be the priority
 
 - [ ] Type casting:
     - Possible syntax:
@@ -102,9 +119,14 @@ some point.
     - But this should eventually be changed into type inference, likely via the
       Unification Algorithm
 
-- [ ] Improve register precoloring
+- [ ] Improve graph coloring API
     - It sucks!
 
+- [ ] Allocate spills
+    - When the graph coloring algorithm "runs out of colors" to assign (as in
+      it goes over 16), that color should be assigned to a stack slot
+    - We need a post-alloc hook that counts how many spills happened and
+      allocates as much space as needed
 
 ## Finished
 
@@ -116,6 +138,5 @@ some point.
     - True precoloring requires integration with the graph coloring algorithm
       itself, meaning I either need to find a better crate to do it for me, or
       fork it and do it myself (likely).
-
 
 _(Note: This list was created on 06/22/2026, so it may not have all goals)_

@@ -270,6 +270,76 @@ impl Compiler {
                 };
                 TirExpr::new(kind, ty)
             }
+            HirExprKind::Index { expr, index } => {
+                // x[i] => *(x + i * sizeof(*x))
+                // TODO: change this to lower indexing manually. Don't convert it to just dererf
+                // arithmetic, a lot of information ends up getting lost
+                // Instead, change the LirVal::Mem API to include base reg, offset reg, scale imm
+                // and displacement imm
+                // This is in hopes of emitting a physical instruction like [rbx + rax * 8 + 1]
+                let expr = self.check_expr(*expr, None);
+                let u64_ty = self.known_types.add(RealType::U64);
+                let index = self.check_expr(*index, Some(u64_ty));
+                let index_ty = index.inner.meta;
+                if *index_ty.lookup() != RealType::U64 {
+                    die!("Cannot index a pointer with a {index_ty}. Use a u64 instead: {index}")
+                }
+                let RealType::Pointer(elem_ty) = *expr.inner.meta.lookup() else {
+                    die!(
+                        "Cannot index a non-pointer type {}: {expr}",
+                        expr.inner.meta
+                    )
+                };
+                let span = expr.span;
+                let sizeof = Spanned::new(
+                    TirExpr::new(TirExprKind::Num(elem_ty.lookup().size() as i128), u64_ty),
+                    span,
+                );
+                let mul = Spanned::new(
+                    TirExpr::new(
+                        TirExprKind::Bin {
+                            op: BinOp::Mul,
+                            lhs: Box::new(index),
+                            rhs: Box::new(sizeof),
+                        },
+                        u64_ty,
+                    ),
+                    span,
+                );
+                let cast_ptr_to_u64 = Spanned::new(
+                    TirExpr::new(
+                        TirExprKind::Cast {
+                            target_ty: Spanned::new(u64_ty, span),
+                            rhs: Box::new(expr),
+                        },
+                        u64_ty,
+                    ),
+                    span,
+                );
+                let add = Spanned::new(
+                    TirExpr::new(
+                        TirExprKind::Bin {
+                            op: BinOp::Add,
+                            lhs: Box::new(cast_ptr_to_u64),
+                            rhs: Box::new(mul),
+                        },
+                        u64_ty,
+                    ),
+                    span,
+                );
+                let cast_to_elem_ty = Spanned::new(
+                    TirExpr::new(
+                        TirExprKind::Cast {
+                            target_ty: Spanned::new(elem_ty, span),
+                            rhs: Box::new(add.clone()),
+                        },
+                        elem_ty,
+                    ),
+                    span,
+                );
+                let kind = TirExprKind::Deref { rhs: Box::new(add) };
+                TirExpr::new(kind, elem_ty)
+            }
             HirExprKind::Deref { rhs } => {
                 // If we get a hint of *T, the sub-expr should be checked with hint T
                 let hint_inner = hint.and_then(|h| match h.lookup() {
@@ -334,7 +404,7 @@ impl Compiler {
                 // - Same sized types (this means all pointers can be cast to and from each other)
                 // - Any primitive with any other primitive
                 let checked_ty = self.check_type(target_ty);
-                let checked_rhs = Box::new(self.check_expr(*rhs, None));
+                let checked_rhs = Box::new(self.check_expr(*rhs, Some(checked_ty.inner)));
                 let ty = checked_ty.inner;
                 let kind = TirExprKind::Cast {
                     target_ty: checked_ty,
@@ -415,10 +485,24 @@ impl Compiler {
                 };
                 TirExpr::new(kind, ty)
             }
-            HirExprKind::Call { callee, args } => todo!(),
-            HirExprKind::SizeOf { ty } => {
-                let ty = self.check_type(ty).inner;
-                let kind = TirExprKind::Num(ty.lookup().size() as i128);
+            HirExprKind::Call { callee, args } => {
+                // TODO: once we add all functions to compiler context, we can check if the user is
+                // passing in the right types
+                let callee = Box::new(self.check_expr(*callee, hint));
+                let args = args.into_iter().map(|a| self.check_expr(a, None)).collect();
+                let kind = TirExprKind::Call { callee, args };
+                TirExpr::new(kind, todo!())
+            }
+            HirExprKind::SizeOfTy { ty } => {
+                let ty_size = self.check_type(ty).inner.lookup().size();
+                let kind = TirExprKind::Num(ty_size as i128);
+                let ty = self.known_types.add(RealType::U64);
+                TirExpr::new(kind, ty)
+            }
+            HirExprKind::SizeOfExpr { expr } => {
+                let ty_size = self.check_expr(*expr, None).inner.meta.lookup().size();
+                let kind = TirExprKind::Num(ty_size as i128);
+                let ty = self.known_types.add(RealType::U64);
                 TirExpr::new(kind, ty)
             }
         };

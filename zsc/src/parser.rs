@@ -223,7 +223,7 @@ impl Compiler {
                 self.expect(Token::LParen);
                 let ty = self.parse_type();
                 self.expect(Token::RParen);
-                let kind = HirExprKind::SizeOf { ty };
+                let kind = HirExprKind::SizeOfTy { ty };
                 HirExpr::new(kind, ())
             }
             Token::Ident(s) => {
@@ -262,10 +262,10 @@ impl Compiler {
             }
             Token::At => {
                 let power = prefix_power(Token::At).unwrap();
-                let target_ty = self.parse_type();
                 self.expect(Token::LParen);
-                let rhs = Box::new(self._parse_expr(power));
+                let target_ty = self.parse_type();
                 self.expect(Token::RParen);
+                let rhs = Box::new(self._parse_expr(power));
                 let kind = HirExprKind::Cast { target_ty, rhs };
                 HirExpr::new(kind, ())
             }
@@ -282,6 +282,15 @@ impl Compiler {
     ) -> Spanned<HirExpr> {
         let span_start = lhs.span;
         let output = match op.inner {
+            Token::LBrack => {
+                let idx = self.parse_expr();
+                self.expect(Token::RBrack);
+                let kind = HirExprKind::Index {
+                    expr: Box::new(lhs),
+                    index: Box::new(idx),
+                };
+                HirExpr::new(kind, ())
+            }
             Token::LParen => {
                 let mut args = vec![];
                 while !self.is_next(Token::RParen) {
