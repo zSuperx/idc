@@ -1,6 +1,7 @@
 #![allow(unused)]
 /// This is "forked"/copied from heuristic-graph-coloring v0.1.0
 /// Credits go to: victorvde
+///
 /// https://docs.rs/heuristic-graph-coloring/latest/heuristic_graph_coloring/index.html
 use std::slice::Iter;
 

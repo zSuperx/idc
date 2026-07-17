@@ -1,12 +1,27 @@
 # Still looking for a name
 
-# TODOs
+## A NOTE ON AI POLICY
+
+This is an educational project. While this may be hard to believe for some
+modern "software developers", this project was written from scratch using no AI
+assisted coding. The only AI involved was me asking where to learn more about
+certain topics (and occassionally asking the AI itself for explanations). 
+
+As such, I will **not** be incorporating any kind of AI generated code for the forseeable future. 
+
+The only exception to this rule is code that is truly out of the scope of
+compilers and its subtopics, like printing error messages or QoL derive macros.
+(Both of these examples once existed within the repository but were replaced
+with hand-written implementations due to the generated code being unpleasant to
+work with).
+
+## TODOs
 
 These are just some goals I have for this compiler project. It's not in order
 and I haven't researched every goal yet. They're just things I want to do at
 some point.
 
-## Unfinished/Planned:
+### Unfinished/Planned:
 
 - [ ] Improve parser API:
     - Right now the parser will just `die!` if it encounters a token it didn't
@@ -16,29 +31,29 @@ some point.
       This requires me to parse either an `expr` OR a `type` once I see a
       `sizeof` token.
 
-- [ ] Change LirVal::Mem (and x86Val::Mem) to include compex addressing modes
-      - DONT lower Expr::Index to (Deref + Add + Mul) subexpr, as a lot
-      of information ends up getting lost 
+- [ ] Change LirVal::Mem (and x86Val::Mem) to include compex addressing modes:
+      - DONT lower Expr::Index to (Deref + Add + Mul) subexpr, as a lot of
+        information ends up getting lost 
       - Instead, change the LirVal::Mem API to include base `Reg`, offset `Option<Reg>`,
         scale `usize` and displacement `usize`
         - For types, scale and disp can get away with being unwrapped values
           since the values `1` and `0` can be used to represent their absence
-      - This is in hopes of emitting a physical instruction like [rbx + rax * 8 + 1]
+      - This is in hopes of emitting a physical memory operand like `[rbx + rax * 8 + 1]`
 
 - [ ] Look into (ab)using `lea` for math!
 
-- [ ] Get a better convergence algorithm for LIVE_{IN,OUT} set computation:
+- [ ] Get a better convergence algorithm for `LIVE_{IN,OUT}` set computation:
     - It can be vastly improved by popping items out of a worklist. When a
-      basic block sees its LIVE sets change, it should push its predecessors
-      into_usize the worklist.
+      basic block sees its `LIVE` sets change, it should push its predecessors
+      into the worklist.
     - The issue is that there is currently no way to find a basic block's
       predecessors. This is a TODO for when that API gets overhauled. For now,
       it just loops forever until convergence.
 
-- [ ] Add peephole optimizations to `optimizer.rs`
-    - These opts should happen at the LIR level so the backend emitter is
+- [ ] Add peephole optimizations to `optimizer.rs`:
+    - These should happen at the LIR level so the backend emitter is
       dealing with the simplest code possible
-    - Of course, peephole opts should also happen on the backend MLIR, but
+    - Of course, peepholes should also happen on the backend MLIR, but
       performing it on LIR should be the priority
 
 - [ ] Type casting:
@@ -82,7 +97,7 @@ some point.
       has a type
     - Probably add `alignof(x)` while you're at it
 
-- [ ] Structs and custom types
+- [ ] Structs and custom types:
     - This might be a doozy. I understand the frontend and field access in the
       backend, but what about casting?
     - Also how do you pass structs by value? It's probably via the stack
@@ -119,16 +134,16 @@ some point.
     - But this should eventually be changed into type inference, likely via the
       Unification Algorithm
 
-- [ ] Improve graph coloring API
+- [ ] Improve graph coloring API:
     - It sucks!
 
-- [ ] Allocate spills
+- [ ] Allocate spills:
     - When the graph coloring algorithm "runs out of colors" to assign (as in
       it goes over 16), that color should be assigned to a stack slot
     - We need a post-alloc hook that counts how many spills happened and
       allocates as much space as needed
 
-## Finished
+### Finished
 
 - [x] Fix register precoloring:
     - The current model just makes a clique between all physical registers and
