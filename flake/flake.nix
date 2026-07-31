@@ -10,9 +10,10 @@
         packages = with pkgs; [
           nasm
           mold
+          just
         ];
       };
     };
 
-  inputs.nixpkgs.url = "github:NixOs/nixpkgs/nixos-25.11";
+  inputs.nixpkgs.url = "github:NixOs/nixpkgs/nixos-unstable";
 }

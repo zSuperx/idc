@@ -1,6 +1,7 @@
 __pycache__/
 .direnv/
 /target
+out/
 *.s
 *.ir
 *.o

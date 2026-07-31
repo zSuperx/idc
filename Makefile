@@ -1,20 +1,23 @@
 default:
 	echo hi read the Makefile
 
-runtime/rt.o: runtime/rt.s
+out:
+	mkdir -p out/
+
+runtime/rt.o: out runtime/rt.s
 	nasm -felf64 runtime/rt.s -o runtime/rt.o
 
-%.s: %.idc
-	cargo r -- $*.idc -S
+out/%.s: out tests/%.idc
+	cargo r -- tests/$*.idc -S -o out/$*.s
 
-%.o: %.s
-	nasm -felf64 $*.s -o $*.o
+out/%.o: out out/%.s
+	nasm -felf64 out/$*.s -o out/$*.o
 
-examples/%: runtime/rt.o examples/%.o
-	mold runtime/rt.o examples/$*.o -o examples/$*
+out/%: out runtime/rt.o out/%.o 
+	mold runtime/rt.o out/$*.o -o out/$*
 
 
 .PHONY: clean
 clean:
-	cargo clean
-	rm examples/*.s examples/*.o examples/*.ir
+	rm -rf out/
+

@@ -3,9 +3,10 @@
 ## A NOTE ON AI POLICY
 
 This is an educational project. While this may be hard to believe for some
-modern "software developers", this project was written from scratch using no AI
-assisted coding. The only AI involved was me asking where to learn more about
-certain topics (and occassionally asking the AI itself for explanations). 
+modern "software developers" who rely on AI for developing, this project was
+written from scratch using no AI assisted coding. The only AI involved was me
+asking where to learn more about certain topics (and occassionally asking the
+AI itself for explanations). 
 
 As such, I will **not** be incorporating any kind of AI generated code for the forseeable future. 
 
@@ -22,6 +23,9 @@ and I haven't researched every goal yet. They're just things I want to do at
 some point.
 
 ### Unfinished/Planned:
+
+- [ ] Create a test suite:
+    - This should include a separate source file for every type of test (i.e. `test_cast.idc`)
 
 - [ ] Improve parser API:
     - Right now the parser will just `die!` if it encounters a token it didn't
