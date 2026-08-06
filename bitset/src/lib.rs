@@ -124,6 +124,30 @@ impl BitSet {
     }
 }
 
+impl std::ops::BitAnd for BitSet {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        self.intersect(&rhs)
+    }
+}
+
+impl std::ops::BitOr for BitSet {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        self.union(&rhs)
+    }
+}
+
+impl std::ops::Sub for BitSet {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self.difference(&rhs)
+    }
+}
+
 impl std::fmt::Debug for BitSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for bucket in self.0.iter().rev() {
