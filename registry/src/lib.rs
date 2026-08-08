@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::{collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData, sync::RwLock};
+use std::{collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData, ops::Deref, sync::RwLock};
 
 /// A registry that stores items and returns cheap `Id`s to reference them with.
 ///
@@ -97,6 +97,14 @@ impl<K: Hash + Clone + Eq> Clone for Id<K> {
 }
 
 impl<K: Hash + Clone + Eq> Copy for Id<K> {}
+
+impl<K: Hash + Clone + Eq> Deref for Id<K> {
+    type Target = K;
+
+    fn deref(&self) -> &Self::Target {
+        self.lookup()
+    }
+}
 
 impl<K: Hash + Clone + Eq> Id<K> {
     fn new(index: usize, pointer: *const Registry<K>) -> Self {

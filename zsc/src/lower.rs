@@ -11,8 +11,11 @@ use crate::prelude::*;
 use LirInstr::*;
 
 impl Compiler {
-    pub fn lower_func(&mut self, obj: Spanned<TirObj>) -> Builder<LirInstr> {
-        match obj.inner {
+    pub fn lower_func(
+        &mut self,
+        Spanned { inner: obj, span }: Spanned<TirObj>,
+    ) -> Builder<LirInstr> {
+        match obj {
             TirObj::Fn {
                 name,
                 returns,
@@ -33,17 +36,17 @@ impl Compiler {
                     } = *info;
                     match kind {
                         SymbolKind::Local => {
-                            let dst = LirVal::mem(builder.new_reg(), ty.lookup().size());
+                            let dst = LirVal::mem(builder.new_reg(), ty.size());
                             builder.emit(Alloc(ty.into(), dst, name));
                             self.func.var2val.insert(name, dst);
                         }
                         SymbolKind::Param(num) => {
                             if address_taken {
-                                let dst = LirVal::mem(builder.new_reg(), ty.lookup().size());
+                                let dst = LirVal::mem(builder.new_reg(), ty.size());
                                 builder.emit(Sparam(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             } else {
-                                let dst = LirVal::reg(builder.new_reg(), ty.lookup().size());
+                                let dst = LirVal::reg(builder.new_reg(), ty.size());
                                 builder.emit(Param(ty.into(), dst, name, num));
                                 self.func.var2val.insert(name, dst);
                             }
@@ -88,16 +91,20 @@ impl Compiler {
         }
     }
 
-    fn lower_stmt(&mut self, builder: &mut Builder<LirInstr>, stmt: Spanned<TirStmt>) {
+    fn lower_stmt(
+        &mut self,
+        builder: &mut Builder<LirInstr>,
+        Spanned { inner: stmt, span }: Spanned<TirStmt>,
+    ) {
         // TODO: Change this its kind of stupid. Span::content() should return just the source code
         // slice, whereas Span::to_string() should print the file:row:col, the content, and the
         // arrows
         if CFG.verbose {
             builder.emit(Comment(
-                stmt.span.content().split('\n').nth(3).unwrap().to_string(),
+                span.content().split('\n').nth(3).unwrap().to_string(),
             ));
         }
-        match stmt.inner {
+        match stmt {
             TirStmt::Let { ty, lhs, rhs } => {
                 let rs1 = self.func.var2val.get(&lhs.inner).copied().unwrap();
                 let LirValKind::Mem(..) = rs1.kind else {
@@ -149,7 +156,7 @@ impl Compiler {
                 }
             }
             TirStmt::Return(spanned) => {
-                if *spanned.inner.ty.lookup() == ResolvedType::Void {
+                if *spanned.inner.ty == ResolvedType::Void {
                     builder.emit(Retv);
                 } else {
                     let ty = spanned.inner.ty;
@@ -168,11 +175,15 @@ impl Compiler {
         }
     }
 
-    fn lower_expr(&mut self, builder: &mut Builder<LirInstr>, expr: Spanned<TirExpr>) -> LirVal {
-        let ty = expr.inner.ty;
-        let size = ty.lookup().size();
+    fn lower_expr(
+        &mut self,
+        builder: &mut Builder<LirInstr>,
+        Spanned { inner: expr, span }: Spanned<TirExpr>,
+    ) -> LirVal {
+        let ty = expr.ty;
+        let size = ty.size();
         let dst = LirVal::reg(builder.new_reg(), size);
-        match expr.inner.kind {
+        match expr.kind {
             TirExprKind::Void => dst,
             TirExprKind::Num(imm) => LirVal::imm(imm, size),
             TirExprKind::Bool(b) => {
@@ -202,7 +213,7 @@ impl Compiler {
                 dst
             }
             TirExprKind::Bin { op, lhs, rhs } => {
-                let is_signed = lhs.inner.ty.lookup().is_signed();
+                let is_signed = lhs.inner.ty.is_signed();
                 let rs1 = self.lower_expr(builder, *lhs);
                 let rs2 = self.lower_expr(builder, *rhs);
                 let instr = match (op, is_signed) {
@@ -273,13 +284,13 @@ impl Compiler {
             TirExprKind::Cast { target_ty, rhs } => {
                 let ty = rhs.inner.ty;
                 let rhs = self.lower_expr(builder, *rhs);
-                if ty.lookup().size() == target_ty.inner.lookup().size() {
+                if ty.size() == target_ty.inner.size() {
                     // @T(T) is a No-op
                     rhs
                 } else {
-                    if ty.lookup().is_primitive() {
-                        if ty.lookup().size() < target_ty.inner.lookup().size() {
-                            if target_ty.inner.lookup().is_signed() {
+                    if ty.is_primitive() {
+                        if ty.size() < target_ty.inner.size() {
+                            if target_ty.inner.is_signed() {
                                 builder.emit(Sext(target_ty.inner, dst, rhs));
                             } else {
                                 builder.emit(Zext(target_ty.inner, dst, rhs));

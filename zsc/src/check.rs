@@ -27,7 +27,7 @@ impl Compiler {
                     .into_iter()
                     .map(|a| {
                         let arg_ty = self.check_type(Spanned::new(*a, ty.span));
-                        if *arg_ty.inner.lookup() == ResolvedType::Void {
+                        if *arg_ty.inner == ResolvedType::Void {
                             die!("Argument cannot have type `void`: {arg_ty}")
                         }
                         println!("{arg_ty}");
@@ -56,7 +56,7 @@ impl Compiler {
                 let mut arg_types = vec![];
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
                     let var_ty = self.check_type(ty);
-                    if *var_ty.inner.lookup() == ResolvedType::Void {
+                    if *var_ty.inner == ResolvedType::Void {
                         die!("Function argument cannot have type {var_ty}");
                     }
 
@@ -129,7 +129,7 @@ impl Compiler {
             HirStmt::Break => todo!(),
             HirStmt::If { cond, then_, else_ } => {
                 let cond = self.check_expr(cond, None);
-                let cond_ty = cond.inner.ty.lookup();
+                let cond_ty = cond.inner.ty;
                 if *cond_ty != ResolvedType::Bool {
                     die!(
                         "Type mismatch. Expected `{}` but got `{}`: {}",
@@ -144,7 +144,7 @@ impl Compiler {
             }
             HirStmt::Return(val) => {
                 let ResolvedType::Function { returns, .. } =
-                    *self.get_symbol_info(self.func.raw_name).ty.lookup()
+                    *self.get_symbol_info(self.func.raw_name).ty
                 else {
                     panic!("Function with non-function type");
                 };
@@ -189,7 +189,7 @@ impl Compiler {
             HirExpr::Num(int_str) => {
                 let ty = match hint {
                     Some(hint_id) => {
-                        let hint_ty = hint_id.lookup();
+                        let hint_ty = hint_id;
                         if hint_ty.is_integral() {
                             hint_id
                         } else {
@@ -239,13 +239,12 @@ impl Compiler {
                     die!("Cannot assign a `{rhs_ty}` to `{lhs_ty}`: {span}")
                 }
                 // TODO: add a new pass for this
-                // if !checked_lhs.inner.kind.is_valid_lvalue() {
-                //     die!(
-                //         "Cannot assign to this expression as it is not a valid LVALUE: {}, {:?}",
-                //         checked_lhs.span,
-                //         checked_lhs.inner.kind
-                //     )
-                // }
+                if !checked_lhs.inner.is_valid_lvalue() {
+                    die!(
+                        "Cannot assign to this expression as it is not a valid LVALUE: {}",
+                        checked_lhs.span,
+                    )
+                }
                 let ty = lhs_ty;
                 let kind = TirExprKind::Assign {
                     lhs: Box::new(checked_lhs),
@@ -264,15 +263,15 @@ impl Compiler {
                 let u64_ty = self.resolved_types.add(ResolvedType::U64);
                 let index = self.check_expr(*index, Some(u64_ty));
                 let index_ty = index.inner.ty;
-                if *index_ty.lookup() != ResolvedType::U64 {
+                if *index_ty != ResolvedType::U64 {
                     die!("Cannot index a pointer with a {index_ty}. Use a u64 instead: {index}")
                 }
-                let ResolvedType::Pointer(elem_ty) = *expr.inner.ty.lookup() else {
+                let ResolvedType::Pointer(elem_ty) = *expr.inner.ty else {
                     die!("Cannot index a non-pointer type {}: {expr}", expr.inner.ty)
                 };
                 let span = expr.span;
                 let sizeof = Spanned::new(
-                    TirExpr::new(TirExprKind::Num(elem_ty.lookup().size() as i128), u64_ty),
+                    TirExpr::new(TirExprKind::Num(elem_ty.size() as i128), u64_ty),
                     span,
                 );
                 let mul = Spanned::new(
@@ -397,13 +396,13 @@ impl Compiler {
                 let rhs_ty = checked_rhs.inner.ty;
                 let ty = match op {
                     UnOp::Not => {
-                        if *(rhs_ty.lookup()) != ResolvedType::Bool {
+                        if *(rhs_ty) != ResolvedType::Bool {
                             die!("Cannot logical not a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
                     }
                     UnOp::Neg => {
-                        if !(rhs_ty.lookup()).is_signed() {
+                        if !(rhs_ty).is_signed() {
                             die!("Cannot negate a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
@@ -422,25 +421,25 @@ impl Compiler {
                 let rhs_ty = checked_rhs.inner.ty;
                 let ty = match op {
                     BinOp::Add => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
+                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
                             die!("Cannot add `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Sub => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
+                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
                             die!("Cannot subtract `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Mul => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
+                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
                             die!("Cannot multiply `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Div => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
+                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
                             die!("Cannot divide `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
@@ -452,7 +451,7 @@ impl Compiler {
                         self.resolved_types.add(ResolvedType::Bool)
                     }
                     BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty.lookup()).is_integral() {
+                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
                             die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         self.resolved_types.add(ResolvedType::Bool)
@@ -474,13 +473,13 @@ impl Compiler {
                 TirExpr::new(kind, todo!())
             }
             HirExpr::SizeOfTy { ty } => {
-                let ty_size = self.check_type(ty).inner.lookup().size();
+                let ty_size = self.check_type(ty).inner.size();
                 let kind = TirExprKind::Num(ty_size as i128);
                 let ty = self.resolved_types.add(ResolvedType::U64);
                 TirExpr::new(kind, ty)
             }
             HirExpr::SizeOfExpr { expr } => {
-                let ty_size = self.check_expr(*expr, None).inner.ty.lookup().size();
+                let ty_size = self.check_expr(*expr, None).inner.ty.size();
                 let kind = TirExprKind::Num(ty_size as i128);
                 let ty = self.resolved_types.add(ResolvedType::U64);
                 TirExpr::new(kind, ty)

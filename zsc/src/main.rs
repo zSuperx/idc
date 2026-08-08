@@ -48,7 +48,7 @@ fn main() {
     let source_code = std::fs::read(&CFG.input).unwrap();
     SOURCE.set(source_code).unwrap();
 
-    let mut comp = Compiler::new();
+    let mut comp = Compiler::new(CFG.input.clone().leak());
     let prog = comp.compile_prog();
 
     let mut buf = String::new();

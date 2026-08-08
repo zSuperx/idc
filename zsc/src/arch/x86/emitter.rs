@@ -125,11 +125,11 @@ impl Emitter {
                     // Stack arg. This IR instruction just ensures that the num'th argument is moved
                     // to the stack
                     LirInstr::Sparam(ty, dst, name, num) => {
-                        let mut loc = x86Val::sysv_arg_n(num, ty.lookup().size());
+                        let mut loc = x86Val::sysv_arg_n(num, ty.size());
                         if num <= 5 {
                             // This means loc is a register. We must move it to the stack
-                            let stk_loc = x86Val::mem(BP, self.v_rsp - 8, ty.lookup().size());
-                            let aligned_size = align_n(ty.lookup().size() as i128, 16);
+                            let stk_loc = x86Val::mem(BP, self.v_rsp - 8, ty.size());
+                            let aligned_size = align_n(ty.size() as i128, 16);
                             self.sub_rsp(aligned_size, &mut builder);
                             builder.emit(Mov(stk_loc, loc));
                             loc = stk_loc;
@@ -138,40 +138,40 @@ impl Emitter {
                         self.v2p.insert(dst, loc);
                     }
                     LirInstr::Param(ty, dst, name, num) => {
-                        let loc = x86Val::sysv_arg_n(num, ty.lookup().size());
+                        let loc = x86Val::sysv_arg_n(num, ty.size());
                         builder.emit(Comment(format!("{name} ({ty}): {dst} -> {loc}")));
                         self.v2p.insert(dst, loc);
                     }
                     LirInstr::Alloc(ty, dst, name) => {
-                        let loc = x86Val::mem(BP, self.v_rsp - 8, ty.lookup().size());
+                        let loc = x86Val::mem(BP, self.v_rsp - 8, ty.size());
                         // TODO: alignment correction should be done after an "sroa" pass i think
-                        let aligned_size = align_n(ty.lookup().size() as i128, 16);
+                        let aligned_size = align_n(ty.size() as i128, 16);
                         self.sub_rsp(aligned_size, &mut builder);
                         builder.emit(Comment(format!("{name} ({ty}): {dst} -> {loc}")));
                         self.v2p.insert(dst, loc);
                     }
                     LirInstr::Copy(ty, dst, rs1) => {
-                        let dst = self.get_any(ty.lookup().size(), dst, &mut builder);
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
+                        let dst = self.get_any(ty.size(), dst, &mut builder);
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
                         builder.emit(Mov(dst, rs1))
                     }
                     // mov ..., [rs1]
                     LirInstr::Load(ty, dst, rs1) => {
-                        let dst = self.get_any(ty.lookup().size(), dst, &mut builder);
-                        let rs1 = self.get_mem(ty.lookup().size(), rs1);
+                        let dst = self.get_any(ty.size(), dst, &mut builder);
+                        let rs1 = self.get_mem(ty.size(), rs1);
 
                         builder.emit(Mov(dst, rs1));
                     }
                     // mov [rs1], ...
                     LirInstr::Store(ty, rs1, rs2) => {
-                        let rs1 = self.get_mem(ty.lookup().size(), rs1);
-                        let rs2 = self.get_any(ty.lookup().size(), rs2, &mut builder);
+                        let rs1 = self.get_mem(ty.size(), rs1);
+                        let rs2 = self.get_any(ty.size(), rs2, &mut builder);
 
                         builder.emit(Mov(rs1, rs2));
                     }
                     LirInstr::Br(ty, rs1, bb1, bb2) => {
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
-                        builder.emit(Cmp(rs1, x86Val::imm(1, ty.lookup().size())));
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
+                        builder.emit(Cmp(rs1, x86Val::imm(1, ty.size())));
                         // If we fall through to the "then" block, there's no need to emit a `jnz`
                         if bb_iter.peek().is_none_or(|next_bb| next_bb.name != bb1) {
                             builder.emit(Jnz(bb1));
@@ -180,23 +180,23 @@ impl Emitter {
                     }
                     LirInstr::Jmp(bb) => builder.emit(Jmp(bb)),
                     LirInstr::Add(ty, dst, rs1, rs2) => {
-                        let dst = self.get_any(ty.lookup().size(), dst, &mut builder);
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
-                        let rs2 = self.get_any(ty.lookup().size(), rs2, &mut builder);
+                        let dst = self.get_any(ty.size(), dst, &mut builder);
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
+                        let rs2 = self.get_any(ty.size(), rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Add(dst, rs2));
                     }
                     LirInstr::Sub(ty, dst, rs1, rs2) => {
-                        let dst = self.get_any(ty.lookup().size(), dst, &mut builder);
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
-                        let rs2 = self.get_any(ty.lookup().size(), rs2, &mut builder);
+                        let dst = self.get_any(ty.size(), dst, &mut builder);
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
+                        let rs2 = self.get_any(ty.size(), rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Sub(dst, rs2));
                     }
                     LirInstr::Smul(ty, dst, rs1, rs2) | LirInstr::Umul(ty, dst, rs1, rs2) => {
-                        let dst = self.get_any(ty.lookup().size(), dst, &mut builder);
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
-                        let rs2 = self.get_any(ty.lookup().size(), rs2, &mut builder);
+                        let dst = self.get_any(ty.size(), dst, &mut builder);
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
+                        let rs2 = self.get_any(ty.size(), rs2, &mut builder);
                         builder.emit(Mov(dst, rs1));
                         builder.emit(Imul(dst, rs2));
                     }
@@ -210,8 +210,8 @@ impl Emitter {
                     | LirInstr::Ult(ty, dst, rs1, rs2)
                     | LirInstr::Ule(ty, dst, rs1, rs2) => {
                         // TODO: figure out wtf im doing here
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
-                        let rs2 = self.get_any(ty.lookup().size(), rs2, &mut builder);
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
+                        let rs2 = self.get_any(ty.size(), rs2, &mut builder);
                         let ty = ResolvedType::I32;
                         let mut dst = self.get_any(ty.size(), dst, &mut builder);
                         dst.size = 4;
@@ -240,8 +240,8 @@ impl Emitter {
                     }
 
                     LirInstr::Ret(ty, rs1) => {
-                        let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
-                        builder.emit(Mov(x86Val::reg(A, ty.lookup().size()), rs1));
+                        let rs1 = self.get_any(ty.size(), rs1, &mut builder);
+                        builder.emit(Mov(x86Val::reg(A, ty.size()), rs1));
                         builder.emit(Jmp(epilogue));
                     }
 
@@ -251,14 +251,14 @@ impl Emitter {
                     LirInstr::Udiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
                     LirInstr::Sdiv(ty, lir_val, lir_val1, lir_val2) => todo!(),
                     LirInstr::Trunc(ty, dst, rs1) => {
-                        let dst = self.get_any(ty.lookup().size(), dst, &mut builder);
+                        let dst = self.get_any(ty.size(), dst, &mut builder);
                         let mut rs1 = self.get_any(rs1.size, rs1, &mut builder);
                         rs1.size = dst.size;
                         builder.emit(Mov(dst, rs1));
                         builder.emit(And(dst, x86Val::imm((1 << (dst.size * 8)) - 1, dst.size)));
                     }
                     LirInstr::Zext(ty, dst, rs1) => {
-                        let dst = self.get_reg(ty.lookup().size(), dst, &mut builder);
+                        let dst = self.get_reg(ty.size(), dst, &mut builder);
                         let mut rs1 = self.get_any(rs1.size, rs1, &mut builder);
                         if matches!(rs1.kind, x86ValKind::Imm(..)) {
                             // The type checker has already validated that the imm is a valid size
@@ -277,7 +277,7 @@ impl Emitter {
                         }
                     }
                     LirInstr::Sext(ty, dst, rs1) => {
-                        let dst = self.get_reg(ty.lookup().size(), dst, &mut builder);
+                        let dst = self.get_reg(ty.size(), dst, &mut builder);
                         let mut rs1 = self.get_any(rs1.size, rs1, &mut builder);
                         if matches!(rs1.kind, x86ValKind::Imm(..)) {
                             // The type checker has already validated that the imm is a valid size

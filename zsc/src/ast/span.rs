@@ -29,6 +29,7 @@ impl<T> Spanned<T> {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
+    pub file: &'static str,
     pub lo: usize,
     pub hi: usize,
     pub row: usize,
@@ -37,13 +38,15 @@ pub struct Span {
 
 #[allow(unused)]
 impl Span {
-    pub fn new(lo: usize, hi: usize, row: usize, col: usize) -> Self {
-        Self { lo, hi, row, col }
+    pub fn new(file: &'static str, lo: usize, hi: usize, row: usize, col: usize) -> Self {
+        Self { file, lo, hi, row, col }
     }
 
     pub fn merge(self, other: Self) -> Self {
+        assert_eq!(self.file, other.file);
         let smaller = if self.lo <= other.lo { &self } else { &other };
         Self {
+            file: self.file,
             lo: self.lo.min(other.lo),
             hi: self.hi.max(other.hi),
             row: smaller.row,
@@ -85,7 +88,8 @@ impl Span {
         }
 
         format!(
-            "\n\n{}:{}:\n{}\n{}{}\n",
+            "\n\n{}:{}:{}:\n{}\n{}{}\n",
+            self.file,
             self.row + 1,
             self.col,
             line_text,

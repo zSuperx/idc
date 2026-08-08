@@ -9,6 +9,7 @@ use crate::ast::*;
 #[derive(Default)]
 pub struct Compiler {
     // Lexer shit
+    pub filename: &'static str,
     pub cursor: usize,
     pub row: usize,
     pub col: usize,
@@ -28,8 +29,9 @@ pub struct Compiler {
 }
 
 impl Compiler {
-    pub fn new() -> Self {
+    pub fn new(filename: &'static str) -> Self {
         let mut s = Self::default();
+        s.filename = filename;
 
         #[rustfmt::skip]
         let builtin_types = [

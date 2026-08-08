@@ -11,6 +11,13 @@ impl TirExpr {
     pub fn new(kind: TirExprKind, ty: ResolvedTypeId) -> Self {
         Self { kind, ty }
     }
+
+    pub fn is_valid_lvalue(&self) -> bool {
+        match self.kind {
+            TirExprKind::Ident(..) | TirExprKind::Deref { .. } | TirExprKind::Index { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

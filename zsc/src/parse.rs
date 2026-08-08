@@ -417,7 +417,7 @@ impl Compiler {
     }
 
     fn make_token(&mut self, kind: Token, lo: usize) -> Spanned<Token> {
-        Spanned::new(kind, Span::new(lo, self.cursor, self.row, self.col))
+        Spanned::new(kind, Span::new(self.filename, lo, self.cursor, self.row, self.col))
     }
 
     fn read_num(&mut self) -> Option<Spanned<Token>> {
