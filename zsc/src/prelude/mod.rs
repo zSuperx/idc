@@ -19,4 +19,4 @@ pub use utils::*;
 pub use crate::die;
 
 use registry::Id;
-pub type StringId = Id<String>;
+pub type Symbol = Id<String>;

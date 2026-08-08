@@ -12,8 +12,8 @@ use LirInstr::*;
 
 impl Compiler {
     pub fn lower_func(&mut self, obj: Spanned<TirObj>) -> Builder<LirInstr> {
-        match obj.inner.kind {
-            TirObjKind::Fn {
+        match obj.inner {
+            TirObj::Fn {
                 name,
                 returns,
                 args,
@@ -22,10 +22,11 @@ impl Compiler {
                 let mut builder = Builder::new(self.func.raw_name.inner, 0, 0);
                 let entry_bb = builder.new_bb("entry");
                 builder.start_new_block(entry_bb);
-                let symbol_table = std::mem::take(&mut self.func.symbol_table);
+                let symbol_table = std::mem::take(&mut self.global_symbols);
                 for (name, info) in symbol_table.iter() {
+                    let name = *name;
                     let SymbolInfo {
-                        name,
+                        raw_name,
                         ty,
                         kind,
                         address_taken,
@@ -58,7 +59,7 @@ impl Compiler {
 
                 if builder.get_terminator().is_none() {
                     match returns.inner.lookup() {
-                        RealType::Void => builder.buf.push(Retv),
+                        ResolvedType::Void => builder.buf.push(Retv),
                         _ => die!(
                             "Control flow reaches the end of a function that was expected to return {returns}"
                         ),
@@ -96,20 +97,20 @@ impl Compiler {
                 stmt.span.content().split('\n').nth(3).unwrap().to_string(),
             ));
         }
-        match stmt.inner.kind {
-            TirStmtKind::Let { ty, lhs, rhs } => {
+        match stmt.inner {
+            TirStmt::Let { ty, lhs, rhs } => {
                 let rs1 = self.func.var2val.get(&lhs.inner).copied().unwrap();
                 let LirValKind::Mem(..) = rs1.kind else {
                     die!("Local variable must be an alloca'd pointer");
                 };
-                let ty = rhs.inner.meta;
+                let ty = rhs.inner.ty;
                 let rs2 = self.lower_expr(builder, rhs);
                 builder.emit(Store(ty, rs1, rs2));
             }
-            TirStmtKind::While { cond, body } => todo!(),
-            TirStmtKind::Continue => todo!(),
-            TirStmtKind::Break => todo!(),
-            TirStmtKind::If { cond, then_, else_ } => {
+            TirStmt::While { cond, body } => todo!(),
+            TirStmt::Continue => todo!(),
+            TirStmt::Break => todo!(),
+            TirStmt::If { cond, then_, else_ } => {
                 // Create labels
                 let if_bb = builder.new_bb("if");
                 let then_bb = builder.new_bb("then");
@@ -120,7 +121,7 @@ impl Compiler {
                 builder.start_new_block(if_bb);
                 let cond_val = self.lower_expr(builder, cond);
                 let branch = Br(
-                    self.known_types.add(RealType::I8),
+                    self.resolved_types.add(ResolvedType::I8),
                     cond_val,
                     then_bb,
                     else_bb,
@@ -147,28 +148,28 @@ impl Compiler {
                     _ => builder.start_new_block(end_bb),
                 }
             }
-            TirStmtKind::Return(spanned) => {
-                if *spanned.inner.meta.lookup() == RealType::Void {
+            TirStmt::Return(spanned) => {
+                if *spanned.inner.ty.lookup() == ResolvedType::Void {
                     builder.emit(Retv);
                 } else {
-                    let ty = spanned.inner.meta;
+                    let ty = spanned.inner.ty;
                     let rs1 = self.lower_expr(builder, spanned);
                     builder.emit(Ret(ty, rs1));
                 }
             }
-            TirStmtKind::Block(spanneds) => {
+            TirStmt::Block(spanneds) => {
                 for s in spanneds {
                     self.lower_stmt(builder, s);
                 }
             }
-            TirStmtKind::Expr(e) => {
+            TirStmt::Expr(e) => {
                 self.lower_expr(builder, e);
             }
         }
     }
 
     fn lower_expr(&mut self, builder: &mut Builder<LirInstr>, expr: Spanned<TirExpr>) -> LirVal {
-        let ty = expr.inner.meta;
+        let ty = expr.inner.ty;
         let size = ty.lookup().size();
         let dst = LirVal::reg(builder.new_reg(), size);
         match expr.inner.kind {
@@ -201,7 +202,7 @@ impl Compiler {
                 dst
             }
             TirExprKind::Bin { op, lhs, rhs } => {
-                let is_signed = lhs.inner.meta.lookup().is_signed();
+                let is_signed = lhs.inner.ty.lookup().is_signed();
                 let rs1 = self.lower_expr(builder, *lhs);
                 let rs2 = self.lower_expr(builder, *rhs);
                 let instr = match (op, is_signed) {
@@ -225,7 +226,7 @@ impl Compiler {
                 dst
             }
             TirExprKind::Assign { lhs, rhs } => match lhs.inner.kind {
-                ExprKind::Ident(varname) => {
+                TirExprKind::Ident(varname) => {
                     let Some(rs1) = self.func.var2val.get(&varname).copied() else {
                         die!("Lvar not found: {varname}");
                     };
@@ -240,7 +241,7 @@ impl Compiler {
                     }
                     rs2
                 }
-                ExprKind::Deref { rhs: store_target } => {
+                TirExprKind::Deref { rhs: store_target } => {
                     let rs1 = self.lower_expr(builder, *store_target);
                     let rs2 = self.lower_expr(builder, *rhs);
                     builder.emit(Store(ty, rs1, rs2));
@@ -253,11 +254,11 @@ impl Compiler {
                 builder.emit(Load(ty, dst, rs1));
                 dst
             }
-            // AddrOf is a meta-instruction. It doesn't actually produce any "work" per-se.
+            // AddrOf is a ty-instruction. It doesn't actually produce any "work" per-se.
             // It simply grabs an existing pointer to the named storage and returns that for use by
             // other expressions
             TirExprKind::AddrOf { rhs } => {
-                let ExprKind::Ident(varname) = rhs.inner.kind else {
+                let TirExprKind::Ident(varname) = rhs.inner.kind else {
                     unreachable!()
                 };
                 let Some(rs1) = self.func.var2val.get(&varname).copied() else {
@@ -270,7 +271,7 @@ impl Compiler {
             }
             TirExprKind::Call { callee, args } => todo!(),
             TirExprKind::Cast { target_ty, rhs } => {
-                let ty = rhs.inner.meta;
+                let ty = rhs.inner.ty;
                 let rhs = self.lower_expr(builder, *rhs);
                 if ty.lookup().size() == target_ty.inner.lookup().size() {
                     // @T(T) is a No-op
@@ -296,7 +297,7 @@ impl Compiler {
                 todo!()
             }
             // The size of a type is known at checking time, so the checker literally replaces
-            // ExprKind::SizeOf with Expr::Num, meaning this should never be hit
+            // TirExprKind::SizeOf with Expr::Num, meaning this should never be hit
             TirExprKind::SizeOfTy { .. } | TirExprKind::SizeOfExpr { .. } => unreachable!(),
         }
     }

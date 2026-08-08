@@ -9,12 +9,16 @@ pub struct Env<K, V> {
 impl<K, V> Default for Env<K, V> {
     fn default() -> Self {
         Self {
-            scopes: Default::default(),
+            scopes: vec![HashMap::default()],
         }
     }
 }
 
 impl<K: Hash + Eq, V: Copy> Env<K, V> {
+    pub fn insert_first(&mut self, name: K, val: V) -> Option<V> {
+        self.scopes.first_mut().unwrap().insert(name, val)
+    }
+
     pub fn insert(&mut self, name: K, val: V) -> Option<V> {
         self.scopes.last_mut().unwrap().insert(name, val)
     }

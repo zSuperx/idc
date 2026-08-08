@@ -4,16 +4,18 @@ use registry::*;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub enum RawType {
-    Named(&'static str),
-    Pointer(Box<RawType>),
+    Base(&'static str),
+    Pointer(RawTypeId),
     Function {
-        args: Vec<RawType>,
-        returns: Box<RawType>,
+        args: Vec<RawTypeId>,
+        returns: RawTypeId,
     },
 }
 
+pub type RawTypeId = Id<RawType>;
+
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
-pub enum RealType {
+pub enum ResolvedType {
     // Primitive types
     I8,
     I16,
@@ -30,51 +32,51 @@ pub enum RealType {
 
     // Rest
     Base(&'static str),
-    Function { args: Vec<TypeId>, returns: TypeId },
-    Pointer(TypeId),
+    Function { args: Vec<ResolvedTypeId>, returns: ResolvedTypeId },
+    Pointer(ResolvedTypeId),
 }
 
-impl RealType {
+impl ResolvedType {
     pub fn is_integral(&self) -> bool {
         match self {
-            RealType::I8
-            | RealType::U8
-            | RealType::I16
-            | RealType::U16
-            | RealType::I32
-            | RealType::U32
-            | RealType::I64
-            | RealType::U64 => true,
+            ResolvedType::I8
+            | ResolvedType::U8
+            | ResolvedType::I16
+            | ResolvedType::U16
+            | ResolvedType::I32
+            | ResolvedType::U32
+            | ResolvedType::I64
+            | ResolvedType::U64 => true,
             _ => false,
         }
     }
 
     pub fn is_primitive(&self) -> bool {
         match self {
-            RealType::I8
-            | RealType::U8
-            | RealType::I16
-            | RealType::U16
-            | RealType::I32
-            | RealType::U32
-            | RealType::I64
-            | RealType::U64
-            | RealType::Bool
-            | RealType::Void => true,
+            ResolvedType::I8
+            | ResolvedType::U8
+            | ResolvedType::I16
+            | ResolvedType::U16
+            | ResolvedType::I32
+            | ResolvedType::U32
+            | ResolvedType::I64
+            | ResolvedType::U64
+            | ResolvedType::Bool
+            | ResolvedType::Void => true,
             _ => false,
         }
     }
 
     pub fn is_signed(&self) -> bool {
         match self {
-            RealType::I8 | RealType::I16 | RealType::I32 | RealType::I64 => true,
+            ResolvedType::I8 | ResolvedType::I16 | ResolvedType::I32 | ResolvedType::I64 => true,
             _ => false,
         }
     }
 
     pub fn alignment(&self) -> usize {
         match self {
-            RealType::Base(_) => todo!(),
+            ResolvedType::Base(_) => todo!(),
             // Function types are coerced to pointers
             x => x.size(),
         }
@@ -82,24 +84,24 @@ impl RealType {
 
     pub fn size(&self) -> usize {
         match self {
-            RealType::I8 | RealType::U8 => 1,
-            RealType::I16 | RealType::U16 => 2,
-            RealType::I32 | RealType::U32 => 4,
-            RealType::I64 | RealType::U64 => 8,
-            RealType::Bool => 1,
-            RealType::Void => 0,
-            RealType::Base(_) => todo!(),
-            RealType::Function { args, returns } => 8,
-            RealType::Pointer(_) => 8,
+            ResolvedType::I8 | ResolvedType::U8 => 1,
+            ResolvedType::I16 | ResolvedType::U16 => 2,
+            ResolvedType::I32 | ResolvedType::U32 => 4,
+            ResolvedType::I64 | ResolvedType::U64 => 8,
+            ResolvedType::Bool => 1,
+            ResolvedType::Void => 0,
+            ResolvedType::Base(_) => todo!(),
+            ResolvedType::Function { args, returns } => 8,
+            ResolvedType::Pointer(_) => 8,
         }
     }
 }
 
-impl std::fmt::Display for RealType {
+impl std::fmt::Display for ResolvedType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            RealType::Base(s) => format_args!("{}", *s),
-            RealType::Function { args, returns } => {
+            ResolvedType::Base(s) => format_args!("{}", *s),
+            ResolvedType::Function { args, returns } => {
                 format_args!(
                     "Fn({}) -> {}",
                     args.iter()
@@ -109,11 +111,11 @@ impl std::fmt::Display for RealType {
                     *returns
                 )
             }
-            RealType::Pointer(type_id) => format_args!("*{}", *type_id),
+            ResolvedType::Pointer(type_id) => format_args!("*{}", *type_id),
             x => format_args!("{}", format!("{x:?}").to_lowercase()),
         };
         f.write_fmt(s)
     }
 }
 
-pub type TypeId = Id<RealType>;
+pub type ResolvedTypeId = Id<ResolvedType>;

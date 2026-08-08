@@ -61,36 +61,38 @@ impl Compiler {
             }
             Token::LCurly => {
                 let span_start = self.mark();
-                let ty = RawType::Named(add_str("void"));
-                self.commit(ty, span_start)
+                let ty = RawType::Base("void");
+                let id = self.raw_types.add(ty);
+                self.commit(id, span_start)
             }
             _ => die!("Expected return type or function body, found {peeked}"),
         };
 
         let body = Box::new(self.parse_block());
 
-        let kind = HirObjKind::Fn {
+        let obj = HirObj::Fn {
             name,
             returns,
             args,
             body,
         };
-        let obj = HirObj::new(kind, ());
         self.commit(obj, span_start)
     }
 
-    fn parse_type(&mut self) -> Spanned<RawType> {
+    fn parse_type(&mut self) -> Spanned<RawTypeId> {
         let span_start = self.mark();
         let tok = self.peek();
         let ty = match tok.inner {
             Token::Star => {
                 self.expect(Token::Star);
-                RawType::Pointer(Box::new(self.parse_type().inner))
+                RawType::Pointer(self.parse_type().inner)
             }
-            _ => RawType::Named(self.expect_ident()),
+            _ => RawType::Base(self.expect_ident()),
         };
 
-        self.commit(ty, span_start)
+        let id = self.raw_types.add(ty);
+
+        self.commit(id, span_start)
     }
 
     fn parse_stmt(&mut self) -> Spanned<HirStmt> {
@@ -99,8 +101,9 @@ impl Compiler {
         let stmt = match tok.inner {
             Token::Let => {
                 self.eat();
-                let sym_start = self.mark();
+                let lhs_start = self.mark();
                 let varname = self.expect_ident();
+                let lhs = self.commit(varname, lhs_start);
                 let ty = self.is_next(Token::Colon).then(|| {
                     self.expect(Token::Colon);
                     self.parse_type()
@@ -108,12 +111,7 @@ impl Compiler {
                 self.expect(Token::Eq);
                 let rhs = self.parse_expr();
                 self.expect(Token::Semi);
-                let kind = HirStmtKind::Let {
-                    lhs: self.commit(varname, sym_start),
-                    ty,
-                    rhs,
-                };
-                HirStmt::new(kind, ())
+                HirStmt::Let { lhs, ty, rhs }
             }
             Token::If => {
                 self.eat();
@@ -127,55 +125,50 @@ impl Compiler {
                         self.parse_block()
                     }
                 } else {
-                    let kind = HirStmtKind::Block(vec![]);
-                    Spanned::new(HirStmt::new(kind, ()), Span::default())
+                    let stmt = HirStmt::Block(vec![]);
+                    Spanned::new(stmt, Span::default())
                 };
 
-                let kind = HirStmtKind::If {
+                HirStmt::If {
                     cond,
                     then_: Box::new(then_),
                     else_: Box::new(else_),
-                };
-                HirStmt::new(kind, ())
+                }
             }
             Token::Break => {
                 self.eat();
                 self.expect(Token::Semi);
-                let kind = HirStmtKind::Break;
-                HirStmt::new(kind, ())
+                HirStmt::Break
             }
             Token::Continue => {
                 self.eat();
                 self.expect(Token::Semi);
-                let kind = HirStmtKind::Continue;
-                HirStmt::new(kind, ())
+                HirStmt::Continue
             }
             Token::Return => {
                 self.eat();
                 let ret_val = if self.is_next(Token::Semi) {
-                    tok.map(|_| HirExpr::new(HirExprKind::Void, ()))
+                    tok.map(|_| HirExpr::Void)
                 } else {
                     self.parse_expr()
                 };
-                let kind = HirStmtKind::Return(ret_val);
+                let stmt = HirStmt::Return(ret_val);
                 self.expect(Token::Semi);
-                HirStmt::new(kind, ())
+                stmt
             }
             Token::While => {
                 self.eat();
                 let cond = self.parse_expr();
                 let body = self.parse_block();
-                let kind = HirStmtKind::While {
+                HirStmt::While {
                     cond,
                     body: Box::new(body),
-                };
-                HirStmt::new(kind, ())
+                }
             }
             _ => {
                 let expr = self.parse_expr();
                 self.expect(Token::Semi);
-                let kind = HirStmtKind::Expr(expr);
-                HirStmt::new(kind, ())
+                HirStmt::Expr(expr)
             }
         };
         self.commit(stmt, span_start)
@@ -187,15 +180,15 @@ impl Compiler {
         let mut stmts = vec![];
         while !self.is_next(Token::RCurly) {
             let stmt = self.parse_stmt();
-            if matches!(stmt.inner.kind, HirStmtKind::Block(ref inner) if inner.is_empty()) {
+            if matches!(stmt.inner, HirStmt::Block(ref inner) if inner.is_empty()) {
                 // Skip nested empty {} blocks, they're useless.
                 continue;
             }
             stmts.push(stmt);
         }
         self.expect(Token::RCurly);
-        let kind = HirStmtKind::Block(stmts);
-        self.commit(HirStmt::new(kind, ()), span_start)
+        let stmt = HirStmt::Block(stmts);
+        self.commit(stmt, span_start)
     }
 
     /// Start a span. This does not change state, but simply returns
@@ -223,26 +216,15 @@ impl Compiler {
                 self.expect(Token::LParen);
                 let ty = self.parse_type();
                 self.expect(Token::RParen);
-                let kind = HirExprKind::SizeOfTy { ty };
-                HirExpr::new(kind, ())
+                HirExpr::SizeOfTy { ty }
             }
-            Token::Ident(s) => {
-                let kind = HirExprKind::Ident(s);
-                HirExpr::new(kind, ())
-            }
+            Token::Ident(s) => HirExpr::Ident(s),
             Token::Minus => {
                 let rhs = Box::new(self.parse_expr());
-                let kind = HirExprKind::Un { op: UnOp::Neg, rhs };
-                HirExpr::new(kind, ())
+                HirExpr::Un { op: UnOp::Neg, rhs }
             }
-            Token::Bool(x) => {
-                let kind = HirExprKind::Bool(x);
-                HirExpr::new(kind, ())
-            }
-            Token::Int(x) => {
-                let kind = HirExprKind::Num(x);
-                HirExpr::new(kind, ())
-            }
+            Token::Bool(x) => HirExpr::Bool(x),
+            Token::Int(x) => HirExpr::Num(x),
             Token::LParen => {
                 let inner_expr = self.parse_expr();
                 self.expect(Token::RParen);
@@ -251,14 +233,12 @@ impl Compiler {
             Token::Star => {
                 let power = prefix_power(Token::Star).unwrap();
                 let rhs = Box::new(self._parse_expr(power));
-                let kind = HirExprKind::Deref { rhs };
-                HirExpr::new(kind, ())
+                HirExpr::Deref { rhs }
             }
             Token::And => {
                 let power = prefix_power(Token::Star).unwrap();
                 let rhs = Box::new(self._parse_expr(power));
-                let kind = HirExprKind::AddrOf { rhs };
-                HirExpr::new(kind, ())
+                HirExpr::AddrOf { rhs }
             }
             Token::At => {
                 let power = prefix_power(Token::At).unwrap();
@@ -266,8 +246,7 @@ impl Compiler {
                 let target_ty = self.parse_type();
                 self.expect(Token::RParen);
                 let rhs = Box::new(self._parse_expr(power));
-                let kind = HirExprKind::Cast { target_ty, rhs };
-                HirExpr::new(kind, ())
+                HirExpr::Cast { target_ty, rhs }
             }
             _ => die!("Expected start of expression, found {tok}"),
         };
@@ -285,11 +264,10 @@ impl Compiler {
             Token::LBrack => {
                 let idx = self.parse_expr();
                 self.expect(Token::RBrack);
-                let kind = HirExprKind::Index {
+                HirExpr::Index {
                     expr: Box::new(lhs),
                     index: Box::new(idx),
-                };
-                HirExpr::new(kind, ())
+                }
             }
             Token::LParen => {
                 let mut args = vec![];
@@ -300,19 +278,17 @@ impl Compiler {
                     args.push(self.parse_expr());
                 }
                 self.expect(Token::RParen);
-                let kind = HirExprKind::Call {
+                HirExpr::Call {
                     callee: Box::new(lhs),
                     args,
-                };
-                HirExpr::new(kind, ())
+                }
             }
             Token::Eq => {
                 let rhs = self._parse_expr(op_power);
-                let kind = HirExprKind::Assign {
+                HirExpr::Assign {
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
-                };
-                HirExpr::new(kind, ())
+                }
             }
             Token::LBrack => {
                 let index = self.parse_expr();
@@ -328,12 +304,11 @@ impl Compiler {
                     _ => unreachable!(),
                 };
 
-                let kind = HirExprKind::Bin {
+                HirExpr::Bin {
                     op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
-                };
-                HirExpr::new(kind, ())
+                }
             }
             rel @ (Token::EqEq | Token::LtEq | Token::Lt | Token::GtEq | Token::Gt) => {
                 let rhs = self._parse_expr(op_power);
@@ -346,12 +321,11 @@ impl Compiler {
                     _ => unreachable!(),
                 };
 
-                let kind = HirExprKind::Bin {
+                HirExpr::Bin {
                     op,
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
-                };
-                HirExpr::new(kind, ())
+                }
             }
             _ => die!("Expected infix operator, found {op}"),
         };

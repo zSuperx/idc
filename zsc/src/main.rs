@@ -16,13 +16,14 @@ use crate::{arch::x86, aux::Compiler};
 mod arch;
 mod ast;
 mod aux;
-mod checker;
+mod check;
 mod hir;
 mod lower;
-mod optimizer;
-mod parser;
+mod optimize;
+mod parse;
 mod prelude;
 mod tir;
+mod validate;
 
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);

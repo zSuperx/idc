@@ -25,24 +25,24 @@ impl LirType {
     }
 }
 
-impl From<&RealType> for LirType {
-    fn from(value: &RealType) -> Self {
+impl From<&ResolvedType> for LirType {
+    fn from(value: &ResolvedType) -> Self {
         match value {
-            RealType::I8 | RealType::U8 => LirType::I8,
-            RealType::I16 | RealType::U16 => LirType::I16,
-            RealType::I32 | RealType::U32 => LirType::I32,
-            RealType::I64 | RealType::U64 => LirType::I64,
-            RealType::Pointer(id) => LirType::Ptr,
-            RealType::Function { args, returns } => LirType::Ptr,
-            RealType::Bool => LirType::I8,
-            RealType::Void => panic!("Can't actually compile void type"),
-            RealType::Base(_) => todo!(),
+            ResolvedType::I8 | ResolvedType::U8 => LirType::I8,
+            ResolvedType::I16 | ResolvedType::U16 => LirType::I16,
+            ResolvedType::I32 | ResolvedType::U32 => LirType::I32,
+            ResolvedType::I64 | ResolvedType::U64 => LirType::I64,
+            ResolvedType::Pointer(id) => LirType::Ptr,
+            ResolvedType::Function { args, returns } => LirType::Ptr,
+            ResolvedType::Bool => LirType::I8,
+            ResolvedType::Void => panic!("Can't actually compile void type"),
+            ResolvedType::Base(_) => todo!(),
         }
     }
 }
 
-impl From<TypeId> for LirType {
-    fn from(value: TypeId) -> Self {
+impl From<ResolvedTypeId> for LirType {
+    fn from(value: ResolvedTypeId) -> Self {
         value.lookup().into()
     }
 }

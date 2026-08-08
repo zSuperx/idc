@@ -212,7 +212,7 @@ impl Emitter {
                         // TODO: figure out wtf im doing here
                         let rs1 = self.get_any(ty.lookup().size(), rs1, &mut builder);
                         let rs2 = self.get_any(ty.lookup().size(), rs2, &mut builder);
-                        let ty = RealType::I32;
+                        let ty = ResolvedType::I32;
                         let mut dst = self.get_any(ty.size(), dst, &mut builder);
                         dst.size = 4;
                         let mut tmp = self.get_any(
