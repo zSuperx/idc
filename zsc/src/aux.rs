@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{arch::lir::*, prelude::*};
+use crate::{arch::lir::*, common::*};
 
 use registry::Registry;
 
@@ -18,7 +18,7 @@ pub struct Compiler {
     pub last_span: Span,
 
     pub func: FnCtx,
-    pub env: Env<&'static str, Symbol>, // Tracks scopes and string -> var, type mappings
+    pub env: Env<&'static str, Symbol>, // Tracks scopes and string -> symbol mappings
     pub global_symbols: HashMap<Symbol, SymbolInfo>,
 
     pub resolved_types: Registry<ResolvedType>, // Uniquely ID'd resolved types.
@@ -50,6 +50,10 @@ impl Compiler {
         s
     }
 
+    pub fn current_function(&self) -> Symbol {
+        self.func.symbol.unwrap()
+    }
+
     pub fn next_sym(&mut self, argname: &str) -> Symbol {
         let id = self.symbol_counter;
         self.symbol_counter += 1;
@@ -72,6 +76,7 @@ impl Compiler {
             ty,
             kind,
             address_taken: false,
+            value: Value::uninit(),
         };
         self.global_symbols.insert(sym, info);
         spanned_sym
@@ -93,12 +98,21 @@ impl Compiler {
             ty,
             kind,
             address_taken: false,
+            value: Value::uninit(),
         };
         self.func.local_symbols.insert(sym, info);
         spanned_sym
     }
 
-    pub fn lookup_symbol(&mut self, symbol: Symbol) -> &mut SymbolInfo {
+    pub fn lookup_symbol(&self, symbol: Symbol) -> &SymbolInfo {
+        self.func
+            .local_symbols
+            .get(&symbol)
+            .or(self.global_symbols.get(&symbol))
+            .unwrap_or_else(|| die!("Symbol {symbol} does not exist"))
+    }
+
+    pub fn lookup_symbol_mut(&mut self, symbol: Symbol) -> &mut SymbolInfo {
         self.func
             .local_symbols
             .get_mut(&symbol)
@@ -123,27 +137,21 @@ impl Compiler {
 
         let mut checked_objects: Vec<_> = parsed_objects
             .into_iter()
-            .map(|o| {
-                match &o.inner {
-                    crate::hir::HirObj::Fn {
-                        name,
-                        returns,
-                        args,
-                        body,
-                    } => self.func.raw_name = *name,
-                    _ => todo!(),
-                }
-                self.check_obj(o)
-            })
+            .map(|o| self.check_obj(o))
             .collect();
 
         // Debug printing
-        for (k, v) in self.global_symbols.iter() {
+        for (k, v) in self
+            .global_symbols
+            .iter()
+            .chain(self.func.local_symbols.iter())
+        {
             let SymbolInfo {
                 raw_name,
                 ty,
                 kind,
                 address_taken,
+                ..
             } = v;
             println!("Symbol {k}");
             println!("Type: {ty}");
@@ -168,13 +176,13 @@ pub struct SymbolInfo {
     pub ty: ResolvedTypeId,
     pub kind: SymbolKind,
     pub address_taken: bool,
+    pub value: Value,
 }
-
-use crate::ast::Spanned;
 
 #[derive(Debug, Default)]
 pub struct FnCtx {
     pub raw_name: Spanned<&'static str>,
+    pub symbol: Option<Symbol>,
     pub local_symbols: HashMap<Symbol, SymbolInfo>,
-    pub var2val: HashMap<Symbol, LirVal>,
+    pub var2val: HashMap<Symbol, Value>,
 }

@@ -16,6 +16,8 @@ pub type RawTypeId = Id<RawType>;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub enum ResolvedType {
+    Unknown,
+
     // Primitive types
     I8,
     I16,
@@ -32,7 +34,10 @@ pub enum ResolvedType {
 
     // Rest
     Base(&'static str),
-    Function { args: Vec<ResolvedTypeId>, returns: ResolvedTypeId },
+    Function {
+        args: Vec<ResolvedTypeId>,
+        returns: ResolvedTypeId,
+    },
     Pointer(ResolvedTypeId),
 }
 
@@ -93,6 +98,7 @@ impl ResolvedType {
             ResolvedType::Base(_) => todo!(),
             ResolvedType::Function { args, returns } => 8,
             ResolvedType::Pointer(_) => 8,
+            Self::Unknown => panic!(),
         }
     }
 }

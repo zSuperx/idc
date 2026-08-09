@@ -36,6 +36,7 @@ impl From<&ResolvedType> for LirType {
             ResolvedType::Function { args, returns } => LirType::Ptr,
             ResolvedType::Bool => LirType::I8,
             ResolvedType::Void => panic!("Can't actually compile void type"),
+            ResolvedType::Unknown => panic!("Can't compile unknown type"),
             ResolvedType::Base(_) => todo!(),
         }
     }

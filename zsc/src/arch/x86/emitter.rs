@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use crate::arch::lir::*;
 use crate::arch::x86::*;
 use crate::ast::*;
-use crate::{CFG, prelude::*};
+use crate::{CFG, common::*};
 
 use bitset::BitSet;
 use heuristic_graph_coloring::{VecVecGraph, color_greedy_by_degree_with_precolor};
@@ -21,7 +21,7 @@ const RAX: x86Val = x86Val::reg(A, 8);
 
 #[derive(Default)]
 pub struct Emitter {
-    v2p: HashMap<LirVal, x86Val>,
+    v2p: HashMap<Value, x86Val>,
     v_rsp: i128,
 }
 
@@ -30,9 +30,9 @@ impl Emitter {
         Self::default()
     }
 
-    fn get_mem(&self, size: usize, v: LirVal) -> x86Val {
+    fn get_mem(&self, size: usize, v: Value) -> x86Val {
         let ret = match v.kind {
-            LirValKind::Reg(id) => {
+            ValueKind::Reg(id) => {
                 // TODO: make this look not stupid
                 let mut maybe_reg =
                     self.v2p
@@ -45,54 +45,57 @@ impl Emitter {
                 }
                 maybe_reg
             }
-            LirValKind::Mem(reg) => self
+            ValueKind::Mem(reg) => self
                 .v2p
                 .get(&v)
                 .copied()
                 .expect("Could not find pointer in v2p map"),
-            LirValKind::Imm(_) => panic!("Resolve pointer called on immediate value"),
+            ValueKind::Imm(_) => panic!("Resolve pointer called on immediate value"),
+            ValueKind::Uninit => panic!("Uninitialized value"),
         };
 
         assert!(matches!(ret.kind, Mem(..)));
         ret
     }
 
-    fn get_any(&self, size: usize, v: LirVal, builder: &mut Builder<x86Instr>) -> x86Val {
+    fn get_any(&self, size: usize, v: Value, builder: &mut Builder<x86Instr>) -> x86Val {
         let ret = match v.kind {
-            LirValKind::Reg(id) => self
+            ValueKind::Reg(id) => self
                 .v2p
                 .get(&v)
                 .copied()
                 .unwrap_or(x86Val::reg(id + 16, v.size)),
-            LirValKind::Mem(..) => {
+            ValueKind::Mem(..) => {
                 let ptr = self.get_mem(size, v);
                 let reg = x86Val::reg(builder.new_reg(), 8);
                 builder.emit(Lea(reg, ptr));
                 reg
             }
-            LirValKind::Imm(i) => x86Val::imm(i, v.size),
+            ValueKind::Imm(i) => x86Val::imm(i, v.size),
+            ValueKind::Uninit => panic!("Uninitialized value"),
         };
         ret
     }
 
-    fn get_reg(&self, size: usize, v: LirVal, builder: &mut Builder<x86Instr>) -> x86Val {
+    fn get_reg(&self, size: usize, v: Value, builder: &mut Builder<x86Instr>) -> x86Val {
         let ret = match v.kind {
-            LirValKind::Reg(id) => self
+            ValueKind::Reg(id) => self
                 .v2p
                 .get(&v)
                 .copied()
                 .unwrap_or(x86Val::reg(id + 16, v.size)),
-            LirValKind::Mem(..) => {
+            ValueKind::Mem(..) => {
                 let ptr = self.get_mem(size, v);
                 let reg = x86Val::reg(builder.new_reg(), 8);
                 builder.emit(Lea(reg, ptr));
                 reg
             }
-            LirValKind::Imm(i) => {
+            ValueKind::Imm(i) => {
                 let reg = x86Val::reg(builder.new_reg(), size);
                 builder.emit(Mov(reg, x86Val::imm(i, size)));
                 reg
             }
+            ValueKind::Uninit => panic!("Uninitialized value"),
         };
         ret
     }
@@ -217,7 +220,7 @@ impl Emitter {
                         dst.size = 4;
                         let mut tmp = self.get_any(
                             ty.size(),
-                            LirVal::reg(builder.new_reg(), ty.size()),
+                            Value::reg(builder.new_reg(), ty.size()),
                             &mut builder,
                         );
                         tmp.size = 4;

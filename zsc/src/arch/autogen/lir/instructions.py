@@ -1,7 +1,8 @@
 from gen import *
 
-V = "LirVal"
-T = "TypeId"
+V = "Value"
+T = "ResolvedTypeId"
+S = "Symbol"
 
 
 def binop(name: str):
@@ -33,9 +34,9 @@ INSTRUCTIONS = [
     InstrInfo("arg", [T, V, "usize"], defs=[], uses=[1]),
     InstrInfo("call", [T, V], defs=[1], uses=[]),
     InstrInfo("copy", [T, V, V], defs=[1], uses=[2]),
-    InstrInfo("alloc", [T, V, "StringId"], defs=[1], uses=[]),
-    InstrInfo("param", [T, V, "StringId", "usize"], defs=[1], uses=[]),
-    InstrInfo("sparam", [T, V, "StringId", "usize"], defs=[1], uses=[]),
+    InstrInfo("alloc", [T, V, S], defs=[1], uses=[]),
+    InstrInfo("param", [T, V, S, "usize"], defs=[1], uses=[]),
+    InstrInfo("sparam", [T, V, S, "usize"], defs=[1], uses=[]),
     InstrInfo("load", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("store", [T, V, V], defs=[], uses=[1, 2]),
     InstrInfo("comment", ["String"], fmt="; {v0}"),

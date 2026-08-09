@@ -1,4 +1,4 @@
-const AUTOGEN_PATH: &'static str = "./src/arch/autogen/";
+const AUTOGEN_PATH: &str = "./src/arch/autogen/";
 
 fn main() {
     println!("cargo::rerun-if-changed={AUTOGEN_PATH}");

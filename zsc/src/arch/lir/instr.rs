@@ -6,42 +6,42 @@
 /// see compiler/src/autogen/lir/instructions.py
 ///
 
-use crate::prelude::*;
+use crate::common::*;
 use crate::ast::*;
 use crate::arch::lir::*;
 
 #[derive(Debug, Clone)]
 pub enum LirInstr {
-		Add(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Sub(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Umul(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Smul(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Udiv(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Sdiv(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Eq(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Sgt(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Sge(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Slt(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Sle(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Ugt(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Uge(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Ult(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Ule(ResolvedTypeId, LirVal, LirVal, LirVal),
-		Arg(ResolvedTypeId, LirVal, usize),
-		Call(ResolvedTypeId, LirVal),
-		Copy(ResolvedTypeId, LirVal, LirVal),
-		Alloc(ResolvedTypeId, LirVal, Symbol),
-		Param(ResolvedTypeId, LirVal, Symbol, usize),
-		Sparam(ResolvedTypeId, LirVal, Symbol, usize),
-		Load(ResolvedTypeId, LirVal, LirVal),
-		Store(ResolvedTypeId, LirVal, LirVal),
+		Add(ResolvedTypeId, Value, Value, Value),
+		Sub(ResolvedTypeId, Value, Value, Value),
+		Umul(ResolvedTypeId, Value, Value, Value),
+		Smul(ResolvedTypeId, Value, Value, Value),
+		Udiv(ResolvedTypeId, Value, Value, Value),
+		Sdiv(ResolvedTypeId, Value, Value, Value),
+		Eq(ResolvedTypeId, Value, Value, Value),
+		Sgt(ResolvedTypeId, Value, Value, Value),
+		Sge(ResolvedTypeId, Value, Value, Value),
+		Slt(ResolvedTypeId, Value, Value, Value),
+		Sle(ResolvedTypeId, Value, Value, Value),
+		Ugt(ResolvedTypeId, Value, Value, Value),
+		Uge(ResolvedTypeId, Value, Value, Value),
+		Ult(ResolvedTypeId, Value, Value, Value),
+		Ule(ResolvedTypeId, Value, Value, Value),
+		Arg(ResolvedTypeId, Value, usize),
+		Call(ResolvedTypeId, Value),
+		Copy(ResolvedTypeId, Value, Value),
+		Alloc(ResolvedTypeId, Value, Symbol),
+		Param(ResolvedTypeId, Value, Symbol, usize),
+		Sparam(ResolvedTypeId, Value, Symbol, usize),
+		Load(ResolvedTypeId, Value, Value),
+		Store(ResolvedTypeId, Value, Value),
 		Comment(String),
-		Sext(ResolvedTypeId, LirVal, LirVal),
-		Zext(ResolvedTypeId, LirVal, LirVal),
-		Trunc(ResolvedTypeId, LirVal, LirVal),
+		Sext(ResolvedTypeId, Value, Value),
+		Zext(ResolvedTypeId, Value, Value),
+		Trunc(ResolvedTypeId, Value, Value),
 		Retv,
-		Ret(ResolvedTypeId, LirVal),
-		Br(ResolvedTypeId, LirVal, BB, BB),
+		Ret(ResolvedTypeId, Value),
+		Br(ResolvedTypeId, Value, BB, BB),
 		Jmp(BB),
 }
 
@@ -87,7 +87,7 @@ impl std::fmt::Display for LirInstr {
 
 
 impl Instr for LirInstr {
-    type Val = LirVal;
+    type Val = Value;
 
     fn srcs(&mut self) -> impl Iterator<Item = &mut Self::Val> {
         match self {

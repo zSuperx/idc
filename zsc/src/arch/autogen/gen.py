@@ -58,7 +58,7 @@ class Arch:
 /// see compiler/src/autogen/{self.arch_name}/instructions.py
 ///
 
-use crate::prelude::*;
+use crate::common::*;
 use crate::ast::*;
 use crate::arch::{self.arch_name}::*;
 

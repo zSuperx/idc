@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::prelude::*;
+use crate::common::*;
 
 #[derive(Debug, Clone)]
 pub struct TirExpr {

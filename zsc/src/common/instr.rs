@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::common::*;
 
 pub trait Instr {
     type Val;

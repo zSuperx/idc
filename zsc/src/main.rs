@@ -2,6 +2,7 @@
 #![allow(nonstandard_style)]
 #![allow(unused)]
 #![warn(unused_imports)]
+// #![warn(unused_variables)]
 use std::{
     collections::HashSet,
     fmt::Write,
@@ -17,13 +18,13 @@ mod arch;
 mod ast;
 mod aux;
 mod check;
-mod hir;
 mod lower;
 mod optimize;
 mod parse;
-mod prelude;
-mod tir;
+mod common;
 mod validate;
+mod collect;
+mod IRs;
 
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);

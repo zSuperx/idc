@@ -1,6 +1,6 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct LirVal {
-    pub kind: LirValKind,
+pub struct Value {
+    pub kind: ValueKind,
     /// Size of value (in bytes).
     ///
     /// This means the size that the LirVal is pointing to. In the case of LirValKind::Reg, it's the
@@ -9,48 +9,61 @@ pub struct LirVal {
     pub size: usize,
 }
 
-impl LirVal {
+impl Value {
     pub fn imm(val: i128, size: usize) -> Self {
-        LirVal {
-            kind: LirValKind::Imm(val),
+        Value {
+            kind: ValueKind::Imm(val),
             size,
         }
     }
 
     pub fn mem(reg: usize, size: usize) -> Self {
-        LirVal {
-            kind: LirValKind::Mem(reg),
+        Value {
+            kind: ValueKind::Mem(reg),
             size,
         }
     }
 
     pub fn reg(reg: usize, size: usize) -> Self {
-        LirVal {
-            kind: LirValKind::Reg(reg),
+        Value {
+            kind: ValueKind::Reg(reg),
             size,
         }
     }
+
+    pub fn uninit() -> Self {
+        Self {
+            kind: ValueKind::Uninit,
+            size: 0,
+        }
+    }
+
+    pub fn is_mem(&self) -> bool {
+        matches!(self.kind, ValueKind::Mem(..))
+    }
 }
 
-impl std::fmt::Display for LirVal {
+impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.kind.fmt(f)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum LirValKind {
+pub enum ValueKind {
+    Uninit,
     Reg(usize),
     Imm(i128),
     Mem(usize),
 }
 
-impl std::fmt::Display for LirValKind {
+impl std::fmt::Display for ValueKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LirValKind::Reg(r) => f.write_fmt(format_args!("%{r}")),
-            LirValKind::Imm(i) => f.write_fmt(format_args!("{i}")),
-            LirValKind::Mem(r) => f.write_fmt(format_args!("ptr %{r}")),
+            ValueKind::Uninit => f.write_str("N/A"),
+            ValueKind::Reg(r) => f.write_fmt(format_args!("%{r}")),
+            ValueKind::Imm(i) => f.write_fmt(format_args!("{i}")),
+            ValueKind::Mem(r) => f.write_fmt(format_args!("ptr %{r}")),
         }
     }
 }

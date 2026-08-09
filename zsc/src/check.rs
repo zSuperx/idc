@@ -1,7 +1,6 @@
 use crate::aux::{SymbolInfo, SymbolKind};
-use crate::hir::*;
-use crate::prelude::*;
-use crate::tir::*;
+use crate::common::*;
+use crate::IRs::{hir::*, tir::*};
 use crate::{ast::*, aux::Compiler};
 
 impl Compiler {
@@ -61,6 +60,7 @@ impl Compiler {
                     }
 
                     let argsym = self.add_local_symbol(argname, var_ty.inner, SymbolKind::Param(i));
+
                     checked_args.push((argsym, var_ty));
                     arg_types.push(var_ty.inner);
                 }
@@ -73,6 +73,8 @@ impl Compiler {
                 let id = self.resolved_types.add(ty);
 
                 let function_symbol = self.add_global_symbol(name, id, SymbolKind::Function);
+                self.func.symbol = Some(function_symbol.inner);
+                self.func.raw_name = name;
 
                 let body = Box::new(self.check_stmt(*body));
                 self.env.pop_scope();
@@ -103,23 +105,12 @@ impl Compiler {
                         rhs.span,
                     );
                 }
-                let var_id = lhs.map(|name| self.next_sym(*name));
                 let var_ty = rhs.inner.ty;
-                // Insert it into this function's context:
-                // add to env & mark it as a local variable
-                self.env.insert(lhs.inner, var_id.inner);
-                self.global_symbols.insert(
-                    var_id.inner,
-                    SymbolInfo {
-                        raw_name: lhs,
-                        ty: var_ty,
-                        kind: SymbolKind::Local,
-                        address_taken: false, // A variable starts non-addr-taken
-                    },
-                );
+
+                let lhs_symbol = self.add_local_symbol(lhs, var_ty, SymbolKind::Local);
 
                 TirStmt::Let {
-                    lhs: var_id,
+                    lhs: lhs_symbol,
                     ty,
                     rhs,
                 }
@@ -144,7 +135,7 @@ impl Compiler {
             }
             HirStmt::Return(val) => {
                 let ResolvedType::Function { returns, .. } =
-                    *self.get_symbol_info(self.func.raw_name).ty
+                    *self.lookup_symbol(self.current_function()).ty
                 else {
                     panic!("Function with non-function type");
                 };
@@ -152,7 +143,7 @@ impl Compiler {
                 if checked_val.inner.ty != returns {
                     die!(
                         "Mismatched return type. Function {} expects {returns} but got {}: {}",
-                        self.func.raw_name.inner,
+                        self.func.raw_name,
                         checked_val.inner.ty,
                         checked_val.span
                     )
@@ -224,7 +215,7 @@ impl Compiler {
             }
             HirExpr::Ident(i) => {
                 let Some(symbol) = self.env.get(&i) else {
-                    die!("Undefined variable: {i}");
+                    die!("Undefined variable {i}: {span}");
                 };
                 let SymbolInfo { ty, .. } = self.lookup_symbol(symbol);
                 let kind = TirExprKind::Ident(symbol);
@@ -356,7 +347,7 @@ impl Compiler {
                         // If Ident, perform the official check
                         let checked_rhs = Box::new(self.check_expr(*rhs, hint));
                         let rhs_ty = checked_rhs.inner.ty;
-                        let TirExprKind::Ident(varname) = checked_rhs.inner.kind else {
+                        let TirExprKind::Ident(var_symbol) = checked_rhs.inner.kind else {
                             unreachable!("rhs was shown to be an Ident")
                         };
 
@@ -364,9 +355,7 @@ impl Compiler {
                         let ty = self.resolved_types.add(ResolvedType::Pointer(rhs_ty));
 
                         // Mark this symbol as address-taken
-                        let Some(info) = self.global_symbols.get_mut(&varname) else {
-                            die!("Undefined variable {varname}");
-                        };
+                        let info = self.lookup_symbol_mut(var_symbol);
                         info.address_taken = true;
 
                         let kind = TirExprKind::AddrOf { rhs: checked_rhs };
@@ -465,8 +454,8 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExpr::Call { callee, args } => {
-                // TODO: once we add all functions to compiler context, we can check if the user is
-                // passing in the right types
+                // TODO: we can't check if the user is passing in the right types of arguments until
+                // we add the callee to the global symbol table
                 let callee = Box::new(self.check_expr(*callee, hint));
                 let args = args.into_iter().map(|a| self.check_expr(a, None)).collect();
                 let kind = TirExprKind::Call { callee, args };

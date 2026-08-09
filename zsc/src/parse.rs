@@ -1,8 +1,8 @@
 use crate::aux::Compiler;
 use crate::{add_str, ast::*};
-use crate::{hir::*, source};
+use crate::{IRs::hir::*, source};
 
-use crate::prelude::*;
+use crate::common::*;
 
 // Parser implementation
 impl Compiler {

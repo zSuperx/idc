@@ -6,7 +6,7 @@
 /// see compiler/src/autogen/x86/instructions.py
 ///
 
-use crate::prelude::*;
+use crate::common::*;
 use crate::ast::*;
 use crate::arch::x86::*;
 

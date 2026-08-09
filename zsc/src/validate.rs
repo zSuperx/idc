@@ -1,6 +1,6 @@
 use crate::aux::*;
 use crate::ast::*;
-use crate::tir::*;
+use crate::IRs::tir::*;
 
 
 impl Compiler {

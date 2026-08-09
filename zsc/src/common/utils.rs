@@ -5,6 +5,8 @@ pub fn align_n(x: i128, n: usize) -> i128 {
 #[macro_export]
 macro_rules! die {
     ($($fmtargs:tt)*) => {{
+        #[cfg(debug_assertions)]
+        eprintln!("=== Invoked from {}:{}:{} ===", file!(), line!(), column!());
         eprintln!($($fmtargs)*);
         ::std::process::exit(1);
     }};
