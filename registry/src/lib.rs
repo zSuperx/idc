@@ -1,5 +1,6 @@
-#![allow(unused)]
-use std::{collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData, ops::Deref, sync::RwLock};
+use std::{
+    collections::HashMap, fmt::Display, hash::Hash, marker::PhantomData, ops::Deref, sync::RwLock,
+};
 
 /// A registry that stores items and returns cheap `Id`s to reference them with.
 ///
@@ -29,14 +30,6 @@ impl<K> Default for Registry<K> {
 impl<K: Hash + Clone + Eq> Registry<K> {
     /// Creates a new Registry. The returned value will be a reference to a static address on the heap.
     /// This is done so that Id's returned by `add` can safely reference the owning store.
-    pub fn new() -> &'static mut Self {
-        let s = Box::new(Self {
-            map: Default::default(),
-            vec: Default::default(),
-            lock: Default::default(),
-        });
-        Box::leak(s)
-    }
 
     /// Add a value to the store. This will return an `Id` that can look itself up if needed.
     ///
@@ -101,7 +94,7 @@ impl<K: Hash + Clone + Eq> Deref for Id<K> {
 }
 
 impl<K: Hash + Clone + Eq> Id<K> {
-    fn new(index: usize, pointer: *const Registry<K>) -> Self {
+    pub fn new(index: usize, pointer: *const Registry<K>) -> Self {
         Self {
             index,
             pointer,

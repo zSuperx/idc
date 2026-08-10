@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
 use crate::{arch::lir::*, common::*};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use registry::Registry;
 
@@ -21,11 +23,10 @@ pub struct Compiler {
     pub env: Env<&'static str, Symbol>, // Tracks scopes and string -> symbol mappings
     pub global_symbols: HashMap<Symbol, SymbolInfo>,
 
-    pub resolved_types: Registry<ResolvedType>, // Uniquely ID'd resolved types.
-    pub raw_types: Registry<RawType>,           // Uniquely ID'd raw types.
-    pub symbols: Registry<String>,              // Uniquely ID'd scoped identifiers
-    pub symbol_counter: usize,                  // Distinguishes shadowed vars
-    pub builtin_types: HashMap<&'static str, ResolvedType>,
+    pub type_names: HashMap<&'static str, TypeId>,
+    pub types: Rc<RefCell<Registry<Type>>>, // Uniquely ID'd resolved types.
+    pub symbols: Rc<RefCell<Registry<String>>>, // Uniquely ID'd scoped identifiers
+    pub symbol_counter: usize,              // Distinguishes shadowed vars
 }
 
 impl Compiler {
@@ -35,19 +36,23 @@ impl Compiler {
 
         #[rustfmt::skip]
         let builtin_types = [
-            ResolvedType::I8,   ResolvedType::U8,
-            ResolvedType::I16,  ResolvedType::U16,
-            ResolvedType::I32,  ResolvedType::U32,
-            ResolvedType::I64,  ResolvedType::U64,
-            ResolvedType::Bool, ResolvedType::Void
+            Type::I8,   Type::U8,
+            Type::I16,  Type::U16,
+            Type::I32,  Type::U32,
+            Type::I64,  Type::U64,
+            Type::Bool, Type::Void
         ];
 
         for ty in builtin_types {
             let ty_str = ty.to_string().leak();
-            s.builtin_types.insert(ty_str, ty.clone());
-            s.resolved_types.add(ty);
+            let id = s.types.borrow_mut().add(ty);
+            s.type_names.insert(ty_str, id);
         }
         s
+    }
+
+    pub fn add_type(&mut self, ty: Type) -> TypeId {
+        self.types.borrow_mut().add(ty)
     }
 
     pub fn current_function(&self) -> Symbol {
@@ -57,13 +62,13 @@ impl Compiler {
     pub fn next_sym(&mut self, argname: &str) -> Symbol {
         let id = self.symbol_counter;
         self.symbol_counter += 1;
-        self.symbols.add(format!("{argname}.{id}"))
+        self.symbols.borrow_mut().add(format!("{argname}.{id}"))
     }
 
     pub fn add_global_symbol(
         &mut self,
         name: Spanned<&'static str>,
-        ty: ResolvedTypeId,
+        ty: TypeId,
         kind: SymbolKind,
     ) -> Spanned<Symbol> {
         let sym = self.next_sym(name.inner);
@@ -85,7 +90,7 @@ impl Compiler {
     pub fn add_local_symbol(
         &mut self,
         name: Spanned<&'static str>,
-        ty: ResolvedTypeId,
+        ty: TypeId,
         kind: SymbolKind,
     ) -> Spanned<Symbol> {
         let sym = self.next_sym(name.inner);
@@ -120,13 +125,6 @@ impl Compiler {
             .unwrap_or_else(|| die!("Symbol {symbol} does not exist"))
     }
 
-    pub fn get_symbol_info(&mut self, raw_name: Spanned<&str>) -> &mut SymbolInfo {
-        let Some(sym) = self.env.get(&raw_name.inner) else {
-            die!("Variable used but not defined: {raw_name}");
-        };
-        self.global_symbols.get_mut(&sym).unwrap()
-    }
-
     pub fn compile_prog(&mut self) -> Vec<Builder<LirInstr>> {
         let mut buf = vec![];
         let mut parsed_objects = vec![];
@@ -134,6 +132,8 @@ impl Compiler {
             let o = self.parse_obj();
             parsed_objects.push(o);
         }
+
+        self.collect_all(&parsed_objects);
 
         let mut checked_objects: Vec<_> = parsed_objects
             .into_iter()
@@ -173,7 +173,7 @@ pub enum SymbolKind {
 #[derive(Debug, Clone, Copy)]
 pub struct SymbolInfo {
     pub raw_name: Spanned<&'static str>,
-    pub ty: ResolvedTypeId,
+    pub ty: TypeId,
     pub kind: SymbolKind,
     pub address_taken: bool,
     pub value: Value,

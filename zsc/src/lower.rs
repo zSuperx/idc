@@ -83,8 +83,8 @@ impl Compiler {
     ) -> Value {
         match expr.kind {
             TirExprKind::Void => todo!(),
-            TirExprKind::Num(val) => Value::imm(val, expr.ty.size()),
-            TirExprKind::Bool(val) => Value::imm(val.into(), expr.ty.size()),
+            TirExprKind::Num(val) => Value::imm(val, expr.ty.lookup().size()),
+            TirExprKind::Bool(val) => Value::imm(val.into(), expr.ty.lookup().size()),
             TirExprKind::Ident(symbol) => todo!(),
             TirExprKind::Assign { lhs, rhs } => todo!(),
             TirExprKind::AddrOf { rhs } => todo!(),

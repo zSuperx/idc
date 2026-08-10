@@ -1,44 +1,28 @@
+use crate::IRs::{hir::*, tir::*};
 use crate::aux::{SymbolInfo, SymbolKind};
 use crate::common::*;
-use crate::IRs::{hir::*, tir::*};
 use crate::{ast::*, aux::Compiler};
 
 impl Compiler {
-    fn check_type(&mut self, ty: Spanned<RawTypeId>) -> Spanned<ResolvedTypeId> {
-        let id = match ty.inner.lookup() {
-            RawType::Base(name) => {
-                let tir_ty = match self.builtin_types.get(name) {
-                    Some(s) => s,
-                    None => &ResolvedType::Base(name),
+    pub fn check_type(
+        &mut self,
+        s @ Spanned { inner: ty, span }: Spanned<TypeId>,
+    ) -> Spanned<TypeId> {
+        let ty = match ty.lookup() {
+            Type::Unresolved(name) => {
+                let Some(id) = self.type_names.get(name) else {
+                    die!("Unknown type {name}: {span}")
                 };
-                if let Some(t) = self.resolved_types.get(tir_ty) {
-                    t
-                } else {
-                    die!("Unknown type: {ty}");
-                }
+                *id
             }
-            RawType::Pointer(p) => {
-                let inner = self.check_type(Spanned::new(*p, ty.span));
-                self.resolved_types.add(ResolvedType::Pointer(inner.inner))
+            Type::Function { args, returns } => todo!(),
+            Type::Pointer(id) => {
+                let inner_ty = self.check_type(Spanned::new(*id, span)).inner;
+                self.add_type(Type::Pointer(inner_ty))
             }
-            RawType::Function { args, returns } => {
-                let args = args
-                    .into_iter()
-                    .map(|a| {
-                        let arg_ty = self.check_type(Spanned::new(*a, ty.span));
-                        if *arg_ty.inner == ResolvedType::Void {
-                            die!("Argument cannot have type `void`: {arg_ty}")
-                        }
-                        println!("{arg_ty}");
-                        arg_ty.inner
-                    })
-                    .collect();
-                let returns = self.check_type(Spanned::new(*returns, ty.span)).inner;
-                self.resolved_types
-                    .add(ResolvedType::Function { args, returns })
-            }
+            x => return s,
         };
-        Spanned::new(id, ty.span)
+        Spanned::new(ty, span)
     }
 
     pub fn check_obj(&mut self, Spanned { inner: obj, span }: Spanned<HirObj>) -> Spanned<TirObj> {
@@ -50,36 +34,28 @@ impl Compiler {
                 body,
                 ..
             } => {
+                let function_symbol = self.env.get_first(&name.inner).unwrap();
+                self.func.symbol = Some(function_symbol);
+                self.func.raw_name = name;
+
                 self.env.push_scope();
                 let mut checked_args = vec![];
-                let mut arg_types = vec![];
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
                     let var_ty = self.check_type(ty);
-                    if *var_ty.inner == ResolvedType::Void {
+                    if *var_ty.inner == Type::Void {
                         die!("Function argument cannot have type {var_ty}");
                     }
 
                     let argsym = self.add_local_symbol(argname, var_ty.inner, SymbolKind::Param(i));
 
                     checked_args.push((argsym, var_ty));
-                    arg_types.push(var_ty.inner);
                 }
                 let returns = self.check_type(returns);
-
-                let ty = ResolvedType::Function {
-                    args: arg_types,
-                    returns: returns.inner,
-                };
-                let id = self.resolved_types.add(ty);
-
-                let function_symbol = self.add_global_symbol(name, id, SymbolKind::Function);
-                self.func.symbol = Some(function_symbol.inner);
-                self.func.raw_name = name;
 
                 let body = Box::new(self.check_stmt(*body));
                 self.env.pop_scope();
                 TirObj::Fn {
-                    name: function_symbol,
+                    name: Spanned::new(function_symbol, span),
                     returns,
                     body,
                     args: checked_args,
@@ -96,6 +72,7 @@ impl Compiler {
             HirStmt::Let { lhs, ty, rhs } => {
                 let ty = ty.map(|t| self.check_type(t));
                 let rhs = self.check_expr(rhs, ty.map(|t| t.inner));
+
                 if let Some(ty) = ty
                     && ty.inner != rhs.inner.ty
                 {
@@ -121,10 +98,10 @@ impl Compiler {
             HirStmt::If { cond, then_, else_ } => {
                 let cond = self.check_expr(cond, None);
                 let cond_ty = cond.inner.ty;
-                if *cond_ty != ResolvedType::Bool {
+                if *cond_ty != Type::Bool {
                     die!(
                         "Type mismatch. Expected `{}` but got `{}`: {}",
-                        ResolvedType::Bool,
+                        Type::Bool,
                         cond_ty,
                         cond.span
                     )
@@ -134,7 +111,7 @@ impl Compiler {
                 TirStmt::If { cond, then_, else_ }
             }
             HirStmt::Return(val) => {
-                let ResolvedType::Function { returns, .. } =
+                let Type::Function { returns, .. } =
                     *self.lookup_symbol(self.current_function()).ty
                 else {
                     panic!("Function with non-function type");
@@ -161,8 +138,6 @@ impl Compiler {
                 TirStmt::Expr(e)
             }
         };
-        // All statements have type void
-        let ty = self.resolved_types.add(ResolvedType::Void);
         // Inherit the same span from the previous phase
         Spanned::new(kind, span)
     }
@@ -170,12 +145,12 @@ impl Compiler {
     fn check_expr(
         &mut self,
         Spanned { inner: expr, span }: Spanned<HirExpr>,
-        hint: Option<ResolvedTypeId>,
+        hint: Option<TypeId>,
     ) -> Spanned<TirExpr> {
         let inner = match expr {
             HirExpr::Void => {
                 let kind = TirExprKind::Void;
-                TirExpr::new(kind, self.resolved_types.add(ResolvedType::Void))
+                TirExpr::new(kind, self.add_type(Type::Void))
             }
             HirExpr::Num(int_str) => {
                 let ty = match hint {
@@ -184,20 +159,20 @@ impl Compiler {
                         if hint_ty.is_integral() {
                             hint_id
                         } else {
-                            self.resolved_types.add(ResolvedType::I32)
+                            self.add_type(Type::I32)
                         }
                     }
-                    None => self.resolved_types.add(ResolvedType::I32),
+                    None => self.add_type(Type::I32),
                 };
                 let result = match ty.lookup() {
-                    ResolvedType::I8 => int_str.parse::<i8>().map(|i| i as i128),
-                    ResolvedType::U8 => int_str.parse::<u8>().map(|i| i as i128),
-                    ResolvedType::I16 => int_str.parse::<i16>().map(|i| i as i128),
-                    ResolvedType::U16 => int_str.parse::<u16>().map(|i| i as i128),
-                    ResolvedType::I32 => int_str.parse::<i32>().map(|i| i as i128),
-                    ResolvedType::U32 => int_str.parse::<u32>().map(|i| i as i128),
-                    ResolvedType::I64 => int_str.parse::<i64>().map(|i| i as i128),
-                    ResolvedType::U64 => int_str.parse::<u64>().map(|i| i as i128),
+                    Type::I8 => int_str.parse::<i8>().map(|i| i as i128),
+                    Type::U8 => int_str.parse::<u8>().map(|i| i as i128),
+                    Type::I16 => int_str.parse::<i16>().map(|i| i as i128),
+                    Type::U16 => int_str.parse::<u16>().map(|i| i as i128),
+                    Type::I32 => int_str.parse::<i32>().map(|i| i as i128),
+                    Type::U32 => int_str.parse::<u32>().map(|i| i as i128),
+                    Type::I64 => int_str.parse::<i64>().map(|i| i as i128),
+                    Type::U64 => int_str.parse::<u64>().map(|i| i as i128),
                     _ => {
                         die!("`{int_str}` could not be parsed as a {ty}");
                     }
@@ -209,7 +184,7 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExpr::Bool(b) => {
-                let ty = self.resolved_types.add(ResolvedType::Bool);
+                let ty = self.add_type(Type::Bool);
                 let kind = TirExprKind::Bool(b);
                 TirExpr::new(kind, ty)
             }
@@ -251,13 +226,13 @@ impl Compiler {
                 // and displacement imm
                 // This is in hopes of emitting a physical instruction like [rbx + rax * 8 + 1]
                 let expr = self.check_expr(*expr, None);
-                let u64_ty = self.resolved_types.add(ResolvedType::U64);
+                let u64_ty = self.add_type(Type::U64);
                 let index = self.check_expr(*index, Some(u64_ty));
                 let index_ty = index.inner.ty;
-                if *index_ty != ResolvedType::U64 {
+                if *index_ty != Type::U64 {
                     die!("Cannot index a pointer with a {index_ty}. Use a u64 instead: {index}")
                 }
-                let ResolvedType::Pointer(elem_ty) = *expr.inner.ty else {
+                let Type::Pointer(elem_ty) = *expr.inner.ty else {
                     die!("Cannot index a non-pointer type {}: {expr}", expr.inner.ty)
                 };
                 let span = expr.span;
@@ -313,7 +288,7 @@ impl Compiler {
             HirExpr::Deref { rhs } => {
                 // If we get a hint of *T, the sub-expr should be checked with hint T
                 let hint_inner = hint.and_then(|h| match h.lookup() {
-                    ResolvedType::Pointer(id) => Some(*id),
+                    Type::Pointer(id) => Some(*id),
                     _ => None,
                 });
                 // We don't want to check the inner expression yet. First check its kind
@@ -328,7 +303,7 @@ impl Compiler {
                         // A deref can only happen on a pointer, and its type will be whatever
                         // the pointer is pointing to
                         let ty = match checked_ty.lookup() {
-                            ResolvedType::Pointer(id) => *id,
+                            Type::Pointer(id) => *id,
                             _ => die!(
                                 "Cannot dereference non-pointer type `{checked_ty}`: {checked_rhs}"
                             ),
@@ -352,7 +327,7 @@ impl Compiler {
                         };
 
                         // Given &x, where x: T, &x has type *T
-                        let ty = self.resolved_types.add(ResolvedType::Pointer(rhs_ty));
+                        let ty = self.add_type(Type::Pointer(rhs_ty));
 
                         // Mark this symbol as address-taken
                         let info = self.lookup_symbol_mut(var_symbol);
@@ -385,13 +360,13 @@ impl Compiler {
                 let rhs_ty = checked_rhs.inner.ty;
                 let ty = match op {
                     UnOp::Not => {
-                        if *(rhs_ty) != ResolvedType::Bool {
+                        if *rhs_ty != Type::Bool {
                             die!("Cannot logical not a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
                     }
                     UnOp::Neg => {
-                        if !(rhs_ty).is_signed() {
+                        if !rhs_ty.is_signed() {
                             die!("Cannot negate a `{rhs_ty}`: {span}")
                         }
                         rhs_ty
@@ -410,19 +385,19 @@ impl Compiler {
                 let rhs_ty = checked_rhs.inner.ty;
                 let ty = match op {
                     BinOp::Add => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
+                        if (lhs_ty != rhs_ty) || !lhs_ty.is_integral() {
                             die!("Cannot add `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Sub => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
+                        if (lhs_ty != rhs_ty) || !lhs_ty.is_integral() {
                             die!("Cannot subtract `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
                     }
                     BinOp::Mul => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
+                        if (lhs_ty != rhs_ty) || !lhs_ty.is_integral() {
                             die!("Cannot multiply `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
                         lhs_ty
@@ -437,13 +412,13 @@ impl Compiler {
                         if lhs_ty != rhs_ty {
                             die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
-                        self.resolved_types.add(ResolvedType::Bool)
+                        self.add_type(Type::Bool)
                     }
                     BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => {
                         if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
                             die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
                         }
-                        self.resolved_types.add(ResolvedType::Bool)
+                        self.add_type(Type::Bool)
                     }
                 };
                 let kind = TirExprKind::Bin {
@@ -457,20 +432,24 @@ impl Compiler {
                 // TODO: we can't check if the user is passing in the right types of arguments until
                 // we add the callee to the global symbol table
                 let callee = Box::new(self.check_expr(*callee, hint));
+                let Type::Function { returns, .. } = *callee.inner.ty else {
+                    die!("Function callee does not resolve to a function type: {callee}");
+                };
+
                 let args = args.into_iter().map(|a| self.check_expr(a, None)).collect();
                 let kind = TirExprKind::Call { callee, args };
-                TirExpr::new(kind, todo!())
+                TirExpr::new(kind, returns)
             }
             HirExpr::SizeOfTy { ty } => {
                 let ty_size = self.check_type(ty).inner.size();
                 let kind = TirExprKind::Num(ty_size as i128);
-                let ty = self.resolved_types.add(ResolvedType::U64);
+                let ty = self.add_type(Type::U64);
                 TirExpr::new(kind, ty)
             }
             HirExpr::SizeOfExpr { expr } => {
                 let ty_size = self.check_expr(*expr, None).inner.ty.size();
                 let kind = TirExprKind::Num(ty_size as i128);
-                let ty = self.resolved_types.add(ResolvedType::U64);
+                let ty = self.add_type(Type::U64);
                 TirExpr::new(kind, ty)
             }
         };

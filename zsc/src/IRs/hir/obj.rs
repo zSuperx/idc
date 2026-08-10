@@ -5,8 +5,8 @@ use super::*;
 pub enum HirObj {
     Fn {
         name: Spanned<&'static str>,
-        returns: Spanned<RawTypeId>,
-        args: Vec<(Spanned<&'static str>, Spanned<RawTypeId>)>,
+        returns: Spanned<TypeId>,
+        args: Vec<(Spanned<&'static str>, Spanned<TypeId>)>,
         body: Box<Spanned<HirStmt>>,
     },
     Global {
@@ -15,6 +15,6 @@ pub enum HirObj {
     },
     Struct {
         name: Spanned<&'static str>,
-        fields: Vec<(Spanned<&'static str>, RawTypeId)>,
+        fields: Vec<(Spanned<&'static str>, TypeId)>,
     },
 }

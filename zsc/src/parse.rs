@@ -61,8 +61,8 @@ impl Compiler {
             }
             Token::LCurly => {
                 let span_start = self.mark();
-                let ty = RawType::Base("void");
-                let id = self.raw_types.add(ty);
+                let ty = Type::Void;
+                let id = self.add_type(ty);
                 self.commit(id, span_start)
             }
             _ => die!("Expected return type or function body, found {peeked}"),
@@ -79,18 +79,18 @@ impl Compiler {
         self.commit(obj, span_start)
     }
 
-    fn parse_type(&mut self) -> Spanned<RawTypeId> {
+    fn parse_type(&mut self) -> Spanned<TypeId> {
         let span_start = self.mark();
         let tok = self.peek();
         let ty = match tok.inner {
             Token::Star => {
                 self.expect(Token::Star);
-                RawType::Pointer(self.parse_type().inner)
+                Type::Pointer(self.parse_type().inner)
             }
-            _ => RawType::Base(self.expect_ident()),
+            _ => Type::Unresolved(self.expect_ident()),
         };
 
-        let id = self.raw_types.add(ty);
+        let id = self.add_type(ty);
 
         self.commit(id, span_start)
     }

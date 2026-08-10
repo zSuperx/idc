@@ -14,7 +14,7 @@ pub enum SirExpr {
         rhs: Box<Spanned<SirExpr>>,
     },
     SizeOfTy {
-        ty: Spanned<RawTypeId>,
+        ty: Spanned<TypeId>,
     },
     SizeOfExpr {
         expr: Box<Spanned<SirExpr>>,
@@ -36,7 +36,7 @@ pub enum SirExpr {
         rhs: Box<Spanned<SirExpr>>,
     },
     Cast {
-        target_ty: Spanned<RawTypeId>,
+        target_ty: Spanned<TypeId>,
         rhs: Box<Spanned<SirExpr>>,
     },
     Call {

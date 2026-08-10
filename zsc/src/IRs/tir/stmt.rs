@@ -7,7 +7,7 @@ use super::*;
 pub enum TirStmt {
     Let {
         lhs: Spanned<Symbol>,
-        ty: Option<Spanned<ResolvedTypeId>>,
+        ty: Option<Spanned<TypeId>>,
         rhs: Spanned<TirExpr>,
     },
     While {

@@ -6,8 +6,8 @@ use crate::common::*;
 pub enum TirObj {
     Fn {
         name: Spanned<Symbol>,
-        returns: Spanned<ResolvedTypeId>,
-        args: Vec<(Spanned<Symbol>, Spanned<ResolvedTypeId>)>,
+        returns: Spanned<TypeId>,
+        args: Vec<(Spanned<Symbol>, Spanned<TypeId>)>,
         body: Box<Spanned<TirStmt>>,
     },
     Global {
@@ -16,6 +16,6 @@ pub enum TirObj {
     },
     Struct {
         name: Spanned<Symbol>,
-        fields: Vec<(Spanned<Symbol>, ResolvedTypeId)>,
+        fields: Vec<(Spanned<Symbol>, TypeId)>,
     },
 }

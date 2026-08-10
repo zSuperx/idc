@@ -4,11 +4,11 @@ use crate::common::*;
 #[derive(Debug, Clone)]
 pub struct TirExpr {
     pub kind: TirExprKind,
-    pub ty: ResolvedTypeId,
+    pub ty: TypeId,
 }
 
 impl TirExpr {
-    pub fn new(kind: TirExprKind, ty: ResolvedTypeId) -> Self {
+    pub fn new(kind: TirExprKind, ty: TypeId) -> Self {
         Self { kind, ty }
     }
 
@@ -34,7 +34,7 @@ pub enum TirExprKind {
         rhs: Box<Spanned<TirExpr>>,
     },
     SizeOfTy {
-        ty: Spanned<ResolvedTypeId>,
+        ty: Spanned<TypeId>,
     },
     SizeOfExpr {
         expr: Box<Spanned<TirExpr>>,
@@ -56,7 +56,7 @@ pub enum TirExprKind {
         rhs: Box<Spanned<TirExpr>>,
     },
     Cast {
-        target_ty: Spanned<ResolvedTypeId>,
+        target_ty: Spanned<TypeId>,
         rhs: Box<Spanned<TirExpr>>,
     },
     Call {

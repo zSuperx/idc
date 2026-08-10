@@ -6,7 +6,7 @@ use super::*;
 pub enum HirStmt {
     Let {
         lhs: Spanned<&'static str>,
-        ty: Option<Spanned<RawTypeId>>,
+        ty: Option<Spanned<TypeId>>,
         rhs: Spanned<HirExpr>,
     },
     While {

@@ -23,6 +23,10 @@ impl<K: Hash + Eq, V: Copy> Env<K, V> {
         self.scopes.last_mut().unwrap().insert(name, val)
     }
 
+    pub fn get_first(&self, name: &K) -> Option<V> {
+        self.scopes.first().unwrap().get(name).copied()
+    }
+
     pub fn get(&self, name: &K) -> Option<V> {
         for scope in self.scopes.iter().rev() {
             if let Some(t) = scope.get(name) {
@@ -31,11 +35,14 @@ impl<K: Hash + Eq, V: Copy> Env<K, V> {
         }
         None
     }
+
     pub fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
     }
 
     pub fn pop_scope(&mut self) {
-        self.scopes.pop();
+        if self.scopes.len() > 1 {
+            self.scopes.pop();
+        }
     }
 }

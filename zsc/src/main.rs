@@ -23,7 +23,7 @@ mod optimize;
 mod parse;
 mod common;
 mod validate;
-mod collect;
+mod precheck;
 mod IRs;
 
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
