@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::{IRs::lir::*, common::*};
+use crate::IRs::lir::LirInstr;
+use crate::backend::x86::x86Backend;
+use crate::common::*;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -120,7 +122,9 @@ impl Compiler {
     }
 
     pub fn get_local_symbols_mut(&mut self) -> &mut HashMap<Symbol, SymbolInfo> {
-        self.functions.get_mut(&self.current_function.unwrap()).unwrap()
+        self.functions
+            .get_mut(&self.current_function.unwrap())
+            .unwrap()
     }
 
     pub fn lookup_symbol(&self, symbol: Symbol) -> &SymbolInfo {
@@ -128,7 +132,7 @@ impl Compiler {
         local_symbols
             .get(&symbol)
             .or(self.global_symbols.get(&symbol))
-            .unwrap_or_else(|| die!("Symbol {symbol} does not exist"))
+            .unwrap_or_else(|| panic!("Symbol {symbol} does not exist"))
     }
 
     pub fn lookup_symbol_mut(&mut self, symbol: Symbol) -> &mut SymbolInfo {
@@ -139,7 +143,7 @@ impl Compiler {
         local_symbols
             .get_mut(&symbol)
             .or(self.global_symbols.get_mut(&symbol))
-            .unwrap_or_else(|| die!("Symbol {symbol} does not exist"))
+            .unwrap_or_else(|| panic!("Symbol {symbol} does not exist"))
     }
 
     pub fn compile_prog(&mut self) {
@@ -156,13 +160,22 @@ impl Compiler {
             .map(|o| self.check_obj(o))
             .collect();
 
-        let mut builder = IRBuilder::default();
+        let mut builder = IRBuilder::<LirInstr>::empty();
 
         for obj in checked_objects {
             self.lower_func(&mut builder, &obj);
             let f = builder.get_current_function();
-            builder.print_function(f);
+            println!();
         }
+
+        println!("=== IR ===");
+        builder.print_all_functions();
+
+        let mut be = x86Backend::default();
+        println!("=== x86 ===");
+        let bebuilder = be.translate(builder);
+        bebuilder.print_all_functions();
+        // println!("{bebuilder:#?}");
 
         // Debug printing
         // for (k, v) in self
@@ -203,4 +216,3 @@ pub struct SymbolInfo {
     pub address_taken: bool,
     pub value: Option<Value>,
 }
-

@@ -73,7 +73,7 @@ impl Compiler {
                     && ty != checked_rhs.ty
                 {
                     die!(
-                        "Type mismatch. Expected {ty} \n...but got `{}`: {}",
+                        "Type mismatch. Expected {ty} but got `{}`: {}",
                         checked_rhs.ty,
                         span,
                     );
@@ -320,7 +320,7 @@ impl Compiler {
                         let info = self.lookup_symbol_mut(var_symbol);
                         info.address_taken = true;
 
-                        let kind = TirExprKind::AddrOf { rhs: checked_rhs };
+                        let kind = TirExprKind::AddrOf { expr: checked_rhs };
                         TirExpr::new(kind, ty)
                     }
                     // ... if we're taking address of a dereference, they cancel out e.g. (&*y == y)
@@ -338,7 +338,7 @@ impl Compiler {
                 let ty = checked_ty;
                 let kind = TirExprKind::Cast {
                     target_ty: checked_ty,
-                    rhs: checked_rhs,
+                    expr: checked_rhs,
                 };
                 TirExpr::new(kind, ty)
             }
@@ -419,7 +419,7 @@ impl Compiler {
                         };
                         TirExpr::new(kind, ty)
                     }
-                    (any1, BinOp::Eq, any2) if any1.ty == any2.ty => {
+                    (any1, BinOp::Eq | BinOp::Ne, any2) if any1.ty == any2.ty => {
                         let ty = self.add_type(Type::Bool);
                         let kind = TirExprKind::Bin {
                             op: *op,
@@ -450,7 +450,7 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExpr::SizeOfExpr { expr } => {
-                let ty_size = self.check_expr(expr, None).ty.bits();
+                let ty_size = self.check_expr(expr, None).ty.bytes();
                 let kind = TirExprKind::Num(ty_size as i128);
                 let ty = self.add_type(Type::U64);
                 TirExpr::new(kind, ty)

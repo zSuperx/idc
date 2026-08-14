@@ -8,8 +8,8 @@
 
 use crate::common::*;
 use crate::ast::*;
-use crate::backend::*;
 use crate::IRs::lir::*;
+use crate::backend::x86::*;
 
 #[derive(Debug, Clone)]
 pub enum x86Instr {
@@ -43,17 +43,17 @@ pub enum x86Instr {
 		Pop(x86Val),
 		Call(x86Val),
 		Ret,
-		Jmp(BB),
-		Je(BB),
-		Jne(BB),
-		Jl(BB),
-		Jle(BB),
-		Jg(BB),
-		Jge(BB),
-		Jo(BB),
-		Jno(BB),
-		Jz(BB),
-		Jnz(BB),
+		Jmp(BBID),
+		Je(BBID),
+		Jne(BBID),
+		Jl(BBID),
+		Jle(BBID),
+		Jg(BBID),
+		Jge(BBID),
+		Jo(BBID),
+		Jno(BBID),
+		Jz(BBID),
+		Jnz(BBID),
 }
 
 

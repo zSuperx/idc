@@ -33,6 +33,7 @@ class Arch:
     val_name: str
     instrs: list[InstrInfo]
     uncond_jump: InstrInfo
+    ad_hoc_imports: list[str]
 
     def __init__(
         self,
@@ -41,12 +42,14 @@ class Arch:
         val: str,
         instrs: list[InstrInfo],
         uncond_jump: InstrInfo,
+        ad_hoc_imports: list[str] = []
     ):
         self.arch_name = name
         self.enum_name = enum
         self.val_name = val
         self.instrs = instrs
         self.uncond_jump = uncond_jump
+        self.ad_hoc_imports = ad_hoc_imports
 
     def gen_file(self) -> str:
         ret = f"""
@@ -60,8 +63,8 @@ class Arch:
 
 use crate::common::*;
 use crate::ast::*;
-use crate::backend::*;
 use crate::IRs::lir::*;
+{'\n'.join(self.ad_hoc_imports)}
 
 {self.gen_enum()}
 

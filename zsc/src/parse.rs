@@ -229,10 +229,20 @@ impl Compiler {
         let tok = self.eat();
         let typed_expr = match tok.inner {
             Token::Sizeof => {
-                self.expect(Token::LParen);
-                let ty = self.parse_type();
-                self.expect(Token::RParen);
-                HirExpr::SizeOfTy { ty }
+                if self.is_next(Token::At) {
+                    self.expect(Token::At);
+                    self.expect(Token::LParen);
+                    let ty = self.parse_type();
+                    self.expect(Token::RParen);
+                    HirExpr::SizeOfTy { ty }
+                } else {
+                    self.expect(Token::LParen);
+                    let expr = self.parse_expr();
+                    self.expect(Token::RParen);
+                    HirExpr::SizeOfExpr {
+                        expr: Box::new(expr),
+                    }
+                }
             }
             Token::Ident(s) => HirExpr::Ident(s),
             Token::Minus => {
@@ -325,6 +335,7 @@ impl Compiler {
             rel @ (Token::EqEq | Token::LtEq | Token::Lt | Token::GtEq | Token::Gt) => {
                 let rhs = self._parse_expr(op_power);
                 let op = match rel {
+                    Token::BangEq => BinOp::Ne,
                     Token::EqEq => BinOp::Eq,
                     Token::LtEq => BinOp::Le,
                     Token::Lt => BinOp::Lt,

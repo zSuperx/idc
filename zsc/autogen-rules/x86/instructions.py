@@ -2,6 +2,7 @@ from gen import *
 
 V = "x86Val"
 
+
 def binop(name) -> InstrInfo:
     return InstrInfo(
         name=name,
@@ -13,7 +14,7 @@ def binop(name) -> InstrInfo:
 
 
 def jump(name) -> InstrInfo:
-    return InstrInfo(name=name, fields=["BB"], defs=[], uses=[], is_terminator=True)
+    return InstrInfo(name=name, fields=["BBID"], defs=[], uses=[], is_terminator=True)
 
 
 def move(name) -> InstrInfo:
@@ -67,10 +68,13 @@ INSTRUCTIONS = [
     jump("jnz"),
 ]
 
+ad_hoc_imports = ["use crate::backend::x86::*;"]
+
 iclass = Arch(
     name="x86",
     enum="x86Instr",
     val=V,
     instrs=INSTRUCTIONS,
     uncond_jump=jmp,
+    ad_hoc_imports=ad_hoc_imports,
 )

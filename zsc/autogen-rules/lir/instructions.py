@@ -24,6 +24,7 @@ INSTRUCTIONS = [
     binop("udiv"),
     binop("sdiv"),
     binop("eq"),
+    binop("ne"),
     binop("sgt"),
     binop("sge"),
     binop("slt"),

@@ -1,6 +1,8 @@
+use std::fmt::{Debug, Display};
+
 use crate::common::*;
 
-pub trait Instr {
+pub trait Instr: Display + Debug + Clone {
     type Val;
 
     fn is_terminator(&self) -> bool;

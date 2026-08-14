@@ -1,13 +1,13 @@
 use crate::ast::{BinOp, Type};
 use crate::aux::SymbolKind;
 use crate::{CFG, die};
-use crate::{IRs::lir::*, IRs::tir::*, aux::Compiler};
+use crate::{IRs::tir::*, aux::Compiler};
 
-use crate::IRs::lir::LirInstr::*;
-use crate::common::IRBuilder;
+use crate::IRs::lir::LirInstr::{self, *};
+use crate::common::{IRBuilder, Value};
 
 impl Compiler {
-    pub fn lower_func(&mut self, builder: &mut IRBuilder, obj: &TirObj) {
+    pub fn lower_func(&mut self, builder: &mut IRBuilder<LirInstr>, obj: &TirObj) {
         match obj {
             TirObj::Fn {
                 name,
@@ -15,19 +15,22 @@ impl Compiler {
                 args,
                 body,
             } => {
-                let function_name = self.current_function.unwrap().lookup().clone().leak();
+                let current_function = self.global_symbols.get(name).unwrap();
+                let function_name = current_function.raw_name.inner;
+                self.current_function = Some(*name);
+
                 builder.create_function(function_name);
 
                 for (sym, info) in self.get_local_symbols_mut() {
                     let val = match info.kind {
                         SymbolKind::Local => {
-                            let dst = builder.next_mem();
+                            let dst = Value::reg(builder.next_reg());
                             builder.emit(Alloca(info.ty, dst));
                             dst
                         }
                         SymbolKind::Arg(i) => {
                             if info.address_taken {
-                                let dst = builder.next_mem();
+                                let dst = Value::reg(builder.next_reg());
                                 builder.emit(Alloca(info.ty, dst));
                                 dst
                             } else {
@@ -44,7 +47,12 @@ impl Compiler {
                 }
 
                 self.lower_stmt(builder, body);
-                if !builder.verify(function_name, *returns.lookup() != Type::Void) {
+                let default_return_instr = if *returns.lookup() == Type::Void {
+                    Some(Retv)
+                } else {
+                    None
+                };
+                if !builder.verify(function_name, default_return_instr) {
                     die!(
                         "Control flow reaches end of non-void function: {}",
                         self.lookup_symbol(*name).raw_name
@@ -56,7 +64,7 @@ impl Compiler {
         }
     }
 
-    fn lower_stmt(&mut self, builder: &mut IRBuilder, stmt: &TirStmt) {
+    fn lower_stmt(&mut self, builder: &mut IRBuilder<LirInstr>, stmt: &TirStmt) {
         match stmt {
             TirStmt::Let { lhs, ty, rhs } => {
                 let rhs_val = self.lower_expr(builder, rhs);
@@ -81,7 +89,14 @@ impl Compiler {
                 let cond_val = self.lower_expr(builder, cond);
 
                 // Cond can jump to body and post-loop blocks
-                builder.emit_br(self.add_type(Type::Bool), cond_val, body_block, end_block);
+                let bool_val = Value::reg(builder.next_reg());
+                builder.emit(Eq(
+                    self.add_type(Type::Bool),
+                    bool_val,
+                    cond_val,
+                    Value::imm(1),
+                ));
+                builder.emit(Br(bool_val, body_block, end_block));
                 builder.add_successors(&[body_block, end_block]);
 
                 // Lower the body stmt
@@ -114,33 +129,44 @@ impl Compiler {
 
                 let then_block = builder.create_blockn(function_name, "then");
                 let else_block = builder.create_blockn(function_name, "else");
-                let join_block = builder.create_blockn(function_name, "endif");
+                let endif_block = builder.create_blockn(function_name, "endif");
 
                 // Lower the cond expr
                 let cond_val = self.lower_expr(builder, cond);
 
                 // Cond can jump to either then or else
-                builder.emit_br(self.add_type(Type::Bool), cond_val, then_block, else_block);
+                let bool_val = Value::reg(builder.next_reg());
+                builder.emit(Eq(
+                    self.add_type(Type::Bool),
+                    bool_val,
+                    cond_val,
+                    Value::imm(1),
+                ));
+                builder.emit(Br(bool_val, then_block, else_block));
                 builder.add_successors(&[then_block, else_block]);
 
                 // Lower then stmt
                 builder.set_insert_point(then_block);
                 self.lower_stmt(builder, then_);
 
-                // Then always jumps to join
-                builder.emit(Jmp(join_block));
-                builder.add_successors(&[join_block]);
+                // Then will jump to endif if not already terminated
+                if !builder.is_current_terminated() {
+                    builder.emit(Jmp(endif_block));
+                    builder.add_successors(&[endif_block]);
+                }
 
                 // Lower else stmt
                 builder.set_insert_point(else_block);
                 self.lower_stmt(builder, else_);
 
                 // Else always jumps to join
-                builder.emit(Jmp(join_block));
-                builder.add_successors(&[join_block]);
+                if !builder.is_current_terminated() {
+                    builder.emit(Jmp(endif_block));
+                    builder.add_successors(&[endif_block]);
+                }
 
                 // Enter the join block
-                builder.set_insert_point(join_block);
+                builder.set_insert_point(endif_block);
             }
             TirStmt::Return(Some(expr)) => {
                 let ret_val = self.lower_expr(builder, expr);
@@ -160,7 +186,7 @@ impl Compiler {
         }
     }
 
-    fn lower_expr(&mut self, builder: &mut IRBuilder, expr: &TirExpr) -> Value {
+    fn lower_expr(&mut self, builder: &mut IRBuilder<LirInstr>, expr: &TirExpr) -> Value {
         match &expr.kind {
             TirExprKind::Void => todo!(),
             TirExprKind::Num(val) => Value::imm(*val),
@@ -169,7 +195,7 @@ impl Compiler {
                 let info = self.lookup_symbol(*symbol);
                 let val = info.value.expect("Symbol doesn't have value");
                 if val.is_mem() {
-                    let dst = builder.next_reg();
+                    let dst = Value::reg(builder.next_reg());
                     builder.emit(Load(info.ty, dst, val));
                     dst
                 } else {
@@ -201,8 +227,8 @@ impl Compiler {
                     lhs_val
                 }
             },
-            TirExprKind::AddrOf { rhs } => {
-                let dst = self.lower_expr(builder, &rhs);
+            TirExprKind::AddrOf { expr } => {
+                let dst = self.lower_expr(builder, &expr);
                 if !dst.is_mem() {
                     die!("Address-of yielded non-address value: {dst}");
                 }
@@ -210,7 +236,7 @@ impl Compiler {
             }
             TirExprKind::Deref { target } => {
                 let target_val = self.lower_expr(builder, target);
-                let dst = builder.next_reg();
+                let dst = Value::reg(builder.next_reg());
                 builder.emit(Load(target.ty.get_pointee(), dst, target_val));
                 dst
             }
@@ -221,17 +247,17 @@ impl Compiler {
                 let rhs_val = self.lower_expr(builder, &rhs);
                 match op {
                     BinOp::Add => {
-                        let result = builder.next_reg();
+                        let result = Value::reg(builder.next_reg());
                         builder.emit(Add(ty, result, lhs_val, rhs_val));
                         result
                     }
                     BinOp::Sub => {
-                        let result = builder.next_reg();
+                        let result = Value::reg(builder.next_reg());
                         builder.emit(Sub(ty, result, lhs_val, rhs_val));
                         result
                     }
                     BinOp::Mul => {
-                        let result = builder.next_reg();
+                        let result = Value::reg(builder.next_reg());
                         if lhs.ty.is_signed() {
                             builder.emit(Smul(ty, result, lhs_val, rhs_val));
                         } else {
@@ -239,35 +265,73 @@ impl Compiler {
                         }
                         result
                     }
-                    BinOp::Div => todo!(),
+                    BinOp::Div => {
+                        let result = Value::reg(builder.next_reg());
+                        if lhs.ty.is_signed() {
+                            builder.emit(Sdiv(ty, result, lhs_val, rhs_val));
+                        } else {
+                            builder.emit(Udiv(ty, result, lhs_val, rhs_val));
+                        }
+                        result
+                    }
                     BinOp::Eq => {
-                        let result = builder.next_reg();
+                        let result = Value::reg(builder.next_reg());
                         let ty = self.add_type(Type::Bool);
                         builder.emit(Eq(ty, result, lhs_val, rhs_val));
                         result
                     }
-                    BinOp::Le => todo!(),
-                    BinOp::Lt => todo!(),
-                    BinOp::Ge => todo!(),
-                    BinOp::Gt => {
-                        let result = builder.next_reg();
+                    BinOp::Ne => {
+                        let result = Value::reg(builder.next_reg());
                         let ty = self.add_type(Type::Bool);
+                        builder.emit(Ne(ty, result, lhs_val, rhs_val));
+                        result
+                    }
+                    BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt => {
+                        let result = Value::reg(builder.next_reg());
+                        let ty = self.add_type(Type::Bool);
+                        let (signed, unsigned) = match op {
+                            BinOp::Lt => (
+                                Slt(ty, result, lhs_val, rhs_val),
+                                Ult(ty, result, lhs_val, rhs_val),
+                            ),
+                            BinOp::Le => (
+                                Sle(ty, result, lhs_val, rhs_val),
+                                Ule(ty, result, lhs_val, rhs_val),
+                            ),
+                            BinOp::Gt => (
+                                Sgt(ty, result, lhs_val, rhs_val),
+                                Ugt(ty, result, lhs_val, rhs_val),
+                            ),
+                            BinOp::Ge => (
+                                Sge(ty, result, lhs_val, rhs_val),
+                                Uge(ty, result, lhs_val, rhs_val),
+                            ),
+                            _ => unreachable!(),
+                        };
                         if lhs.ty.is_signed() {
-                            builder.emit(Sgt(ty, result, lhs_val, rhs_val));
+                            builder.emit(signed);
                         } else {
-                            builder.emit(Sgt(ty, result, lhs_val, rhs_val));
+                            builder.emit(unsigned);
                         }
                         result
                     }
                 }
             }
-            TirExprKind::Cast { target_ty, rhs } => {
-                let rhs_val = self.lower_expr(builder, rhs);
-                let dst = builder.next_reg();
-                if target_ty.bits() < rhs.ty.bits() {
+            TirExprKind::Cast { target_ty, expr } => {
+                let rhs_val = self.lower_expr(builder, expr);
+                let dst = Value::reg(builder.next_reg());
+                if target_ty.bits() < expr.ty.bits() {
                     builder.emit(Trunc(*target_ty, dst, rhs_val))
-                } else {
-                    todo!()
+                } else if target_ty.bits() > expr.ty.bits() {
+                    // i8 -> i32: sext
+                    // u8 -> u32: zext
+                    // i8 -> u32: zext
+                    // u8 -> i32: sext
+                    if target_ty.is_signed() {
+                        builder.emit(Sext(*target_ty, dst, rhs_val));
+                    } else {
+                        builder.emit(Zext(*target_ty, dst, rhs_val));
+                    }
                 }
                 dst
             }

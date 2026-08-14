@@ -8,8 +8,8 @@
 
 use crate::common::*;
 use crate::ast::*;
-use crate::backend::*;
 use crate::IRs::lir::*;
+
 
 #[derive(Debug, Clone)]
 pub enum LirInstr {
@@ -20,6 +20,7 @@ pub enum LirInstr {
 		Udiv(TypeId, Value, Value, Value),
 		Sdiv(TypeId, Value, Value, Value),
 		Eq(TypeId, Value, Value, Value),
+		Ne(TypeId, Value, Value, Value),
 		Sgt(TypeId, Value, Value, Value),
 		Sge(TypeId, Value, Value, Value),
 		Slt(TypeId, Value, Value, Value),
@@ -54,6 +55,7 @@ impl std::fmt::Display for LirInstr {
 						Self::Udiv(v0, v1, v2, v3) => f.write_fmt(format_args!("udiv {v0}, {v1}, {v2}, {v3}")),
 						Self::Sdiv(v0, v1, v2, v3) => f.write_fmt(format_args!("sdiv {v0}, {v1}, {v2}, {v3}")),
 						Self::Eq(v0, v1, v2, v3) => f.write_fmt(format_args!("eq {v0}, {v1}, {v2}, {v3}")),
+						Self::Ne(v0, v1, v2, v3) => f.write_fmt(format_args!("ne {v0}, {v1}, {v2}, {v3}")),
 						Self::Sgt(v0, v1, v2, v3) => f.write_fmt(format_args!("sgt {v0}, {v1}, {v2}, {v3}")),
 						Self::Sge(v0, v1, v2, v3) => f.write_fmt(format_args!("sge {v0}, {v1}, {v2}, {v3}")),
 						Self::Slt(v0, v1, v2, v3) => f.write_fmt(format_args!("slt {v0}, {v1}, {v2}, {v3}")),
@@ -93,6 +95,7 @@ impl Instr for LirInstr {
 						Self::Udiv(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Sdiv(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Eq(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
+						Self::Ne(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Sgt(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Sge(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Slt(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
@@ -126,6 +129,7 @@ impl Instr for LirInstr {
 						Self::Udiv(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Sdiv(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Eq(v0, v1, v2, v3) => vec![v1].into_iter(),
+						Self::Ne(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Sgt(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Sge(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Slt(v0, v1, v2, v3) => vec![v1].into_iter(),
@@ -159,6 +163,7 @@ impl Instr for LirInstr {
 						Self::Udiv(v0, v1, v2, v3) => false,
 						Self::Sdiv(v0, v1, v2, v3) => false,
 						Self::Eq(v0, v1, v2, v3) => false,
+						Self::Ne(v0, v1, v2, v3) => false,
 						Self::Sgt(v0, v1, v2, v3) => false,
 						Self::Sge(v0, v1, v2, v3) => false,
 						Self::Slt(v0, v1, v2, v3) => false,

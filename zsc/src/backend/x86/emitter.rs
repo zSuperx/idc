@@ -5,8 +5,8 @@
 // https://en.wikipedia.org/wiki/Live-variable_analysis
 use std::collections::HashMap;
 
-use crate::arch::lir::*;
-use crate::arch::x86::*;
+use crate::IRs::lir::{Value, ValueKind};
+use crate::backend::x86::*;
 use crate::ast::*;
 use crate::{CFG, common::*};
 
@@ -51,7 +51,7 @@ impl Emitter {
                 .copied()
                 .expect("Could not find pointer in v2p map"),
             ValueKind::Imm(_) => panic!("Resolve pointer called on immediate value"),
-            ValueKind::Uninit => panic!("Uninitialized value"),
+            ValueKind::Arg(_) => todo!(),
         };
 
         assert!(matches!(ret.kind, Mem(..)));

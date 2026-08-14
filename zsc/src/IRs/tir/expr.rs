@@ -31,7 +31,7 @@ pub enum TirExprKind {
         rhs: Box<TirExpr>,
     },
     AddrOf {
-        rhs: Box<TirExpr>,
+        expr: Box<TirExpr>,
     },
     Deref {
         target: Box<TirExpr>,
@@ -47,7 +47,7 @@ pub enum TirExprKind {
     },
     Cast {
         target_ty: TypeId,
-        rhs: Box<TirExpr>,
+        expr: Box<TirExpr>,
     },
     Call {
         callee: Box<TirExpr>,

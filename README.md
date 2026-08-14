@@ -60,31 +60,6 @@ some point.
     - Of course, peepholes should also happen on the backend MLIR, but
       performing it on LIR should be the priority
 
-- [ ] Type casting:
-    - Possible syntax:
-        - `@i32(x)` / `@*i32(x)` <- this is what I'm doing right now
-        - `@(x, i32)`
-        - `cast(x, i32)`
-        - `x as i32` (Rust) lame
-        - `(i32)x` (C) hard to parse
-        - `x::cast<i32>` wtf is this
-    - Since type casting between primitive types of different sizes implies
-      either zero/sign extending or truncating/zeroing leading bits, this also
-      means `Zext`, `Sext` and `Trunc` instructions should be added to the
-      `LIR` ISA
-    - A cast from `T` to `U` where `sizeof(T) > sizeof(U)` should result in
-      `Trunc u, t, n`, where `n` = `sizeof(U) * 8`
-    - A cast from `U` to `T` should result in either
-      `Zext t, u, n` or `Sext t, u, n`, where `n` = `sizeof(T) * 8`
-    - When `float` is added to the language, `Trunc` should be used, otherwise
-      emit an `And t, (1 << sizeof(T) * 8 - 1)`, which just masks out
-      everything. Might have to be careful with signed integers, but think
-      about that later
-    - Casting should be valid between:
-        1. Same sized types (this means all pointers can be cast to and from
-           each other)
-        2. Any primitive with any other primitive
-
 - [ ] Function calls (x86):
     - This should be easy enough, the only hurdle is tracking `use` and `def`
       sets in liveness analysis and register allocation
@@ -157,5 +132,31 @@ some point.
     - True precoloring requires integration with the graph coloring algorithm
       itself, meaning I either need to find a better crate to do it for me, or
       fork it and do it myself (likely).
+
+- [x] Type casting:
+    - Possible syntax:
+        - `@i32(x)` / `@*i32(x)` <- this is what I'm doing right now
+        - `@(x, i32)`
+        - `cast(x, i32)`
+        - `x as i32` (Rust) lame
+        - `(i32)x` (C) hard to parse
+        - `x::cast<i32>` wtf is this
+    - Since type casting between primitive types of different sizes implies
+      either zero/sign extending or truncating/zeroing leading bits, this also
+      means `Zext`, `Sext` and `Trunc` instructions should be added to the
+      `LIR` ISA
+    - A cast from `T` to `U` where `sizeof(T) > sizeof(U)` should result in
+      `Trunc u, t, n`, where `n` = `sizeof(U) * 8`
+    - A cast from `U` to `T` should result in either
+      `Zext t, u, n` or `Sext t, u, n`, where `n` = `sizeof(T) * 8`
+    - When `float` is added to the language, `Trunc` should be used, otherwise
+      emit an `And t, (1 << sizeof(T) * 8 - 1)`, which just masks out
+      everything. Might have to be careful with signed integers, but think
+      about that later
+    - Casting should be valid between:
+        1. Same sized types (this means all pointers can be cast to and from
+           each other)
+        2. Any primitive with any other primitive
+
 
 _(Note: This list was created on 06/22/2026, so it may not have all goals)_

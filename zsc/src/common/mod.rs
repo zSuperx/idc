@@ -8,6 +8,9 @@ pub use instr::*;
 mod builder;
 pub use builder::*;
 
+mod value;
+pub use value::*;
+
 mod env;
 pub use env::*;
 

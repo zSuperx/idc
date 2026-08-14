@@ -1,7 +1,7 @@
 #![allow(nonstandard_style)]
 
-mod emitter;
-pub use emitter::*;
+mod isel;
+pub use isel::*;
 
 mod val;
 pub use val::*;

@@ -5,6 +5,7 @@ pub enum BinOp {
     Mul,
     Div,
 
+    Ne,
     Eq,
 
     Le,
@@ -41,6 +42,7 @@ impl std::fmt::Display for BinOp {
             BinOp::Sub => "-",
             BinOp::Mul => "*",
             BinOp::Div => "/",
+            BinOp::Ne => "!=",
             BinOp::Eq => "==",
             BinOp::Le => "<=",
             BinOp::Lt => "<",

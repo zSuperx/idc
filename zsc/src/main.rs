@@ -14,11 +14,12 @@ use clap::{Parser, ValueEnum};
 use crate::aux::Compiler;
 // use crate::arch::x86;
 
-mod backend;
+
 mod ast;
 mod aux;
 mod check;
 mod lower;
+mod backend;
 // mod optimize;
 mod IRs;
 mod common;
