@@ -2,13 +2,12 @@
 
 ## A NOTE ON AI POLICY
 
-This is an educational project. While this may be hard to believe for some
-modern "software developers" who rely on AI for developing, this project was
-written from scratch using no AI assisted coding. The only AI involved was me
-asking where to learn more about certain topics (and occassionally asking the
-AI itself for explanations). 
+This is an educational project, and was written from scratch using no AI
+assisted coding. The only AI involved was me asking where to learn more about
+certain topics (and occassionally asking the AI itself for explanations). 
 
-As such, I will **not** be incorporating any kind of AI generated code for the forseeable future. 
+As such, I will **not** be incorporating any kind of AI generated code for the
+forseeable future. 
 
 The only exception to this rule is code that is truly out of the scope of
 compilers and its subtopics, like printing error messages or QoL derive macros.
