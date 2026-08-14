@@ -39,7 +39,13 @@ pub struct Span {
 #[allow(unused)]
 impl Span {
     pub fn new(file: &'static str, lo: usize, hi: usize, row: usize, col: usize) -> Self {
-        Self { file, lo, hi, row, col }
+        Self {
+            file,
+            lo,
+            hi,
+            row,
+            col,
+        }
     }
 
     pub fn merge(self, other: Self) -> Self {

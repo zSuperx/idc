@@ -60,7 +60,8 @@ class Arch:
 
 use crate::common::*;
 use crate::ast::*;
-use crate::arch::{self.arch_name}::*;
+use crate::backend::*;
+use crate::IRs::lir::*;
 
 {self.gen_enum()}
 
@@ -119,7 +120,7 @@ impl Instr for {self.enum_name} {{
         }}
     }}
 
-    fn uncond_jump(bb: BB) -> Self {{
+    fn uncond_jump(bb: BBID) -> Self {{
         Self::{self.uncond_jump.name.capitalize()}(bb)
     }}
 }}

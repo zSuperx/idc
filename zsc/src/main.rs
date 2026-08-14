@@ -2,29 +2,29 @@
 #![allow(nonstandard_style)]
 #![allow(unused)]
 #![warn(unused_imports)]
-// #![warn(unused_variables)]
+#![warn(unused_qualifications)]
+#![warn(unused_allocation)]
 use std::{
     collections::HashSet,
-    fmt::Write,
-    process::Command,
     sync::{LazyLock, OnceLock},
 };
 
 use clap::{Parser, ValueEnum};
 
-use crate::{arch::x86, aux::Compiler};
+use crate::aux::Compiler;
+// use crate::arch::x86;
 
-mod arch;
+mod backend;
 mod ast;
 mod aux;
 mod check;
 mod lower;
-mod optimize;
-mod parse;
-mod common;
-mod validate;
-mod precheck;
+// mod optimize;
 mod IRs;
+mod common;
+mod parse;
+mod precheck;
+mod validate;
 
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);
@@ -59,87 +59,87 @@ fn main() {
         }
     }
 
-    // Linearize
-    for func in prog {
-        match CFG.action {
-            Action::EmitIr => buf.write_fmt(format_args!("{}", func)).unwrap(),
-            _ => match CFG.target {
-                Target::x86 => {
-                    let mut emitter = x86::Emitter::new();
-                    let func = emitter.translate_func(func);
-                    buf.write_fmt(format_args!("{func}")).unwrap();
-                }
-            },
-        }
-    }
-
-    match CFG.action {
-        Action::EmitIr | Action::EmitAsm => {
-            if CFG.output == "-" {
-                println!("{buf}");
-            } else {
-                std::fs::write(&CFG.output, &buf).unwrap();
-            }
-            return;
-        }
-
-        Action::CompileOnly => {
-            if CFG.output == "-" {
-                die!("Can only output to stdout when emitting assembly or IR (see -S or -E)");
-            }
-            let asm = tempfile::NamedTempFile::new().unwrap();
-
-            std::fs::write(asm.path(), &buf).unwrap();
-
-            let status = Command::new("nasm")
-                .arg("-felf64")
-                .arg(asm.path())
-                .arg("-o")
-                .arg(&CFG.output)
-                .status()
-                .unwrap();
-
-            if !status.success() {
-                die!("assembly failed");
-            }
-
-            return;
-        }
-
-        Action::AssembleAndLink => {
-            if CFG.output == "-" {
-                die!("Can only output to stdout when emitting assembly or IR (see -S or -E)");
-            }
-            let asm = tempfile::NamedTempFile::new().unwrap();
-            let obj = tempfile::NamedTempFile::new().unwrap();
-
-            std::fs::write(asm.path(), &buf).unwrap();
-
-            let status = Command::new("nasm")
-                .arg("-felf64")
-                .arg(asm.path())
-                .arg("-o")
-                .arg(obj.path())
-                .status()
-                .unwrap();
-
-            if !status.success() {
-                die!("assembling failed");
-            }
-
-            let status = Command::new("mold")
-                .arg(obj.path())
-                .arg("runtime/rt.o")
-                .arg("-o")
-                .arg(&CFG.output)
-                .status()
-                .unwrap();
-
-            if !status.success() {
-                die!("linking failed");
-            }
-        }
-    }
+    // // Linearize
+    // for func in prog {
+    //     match CFG.action {
+    //         Action::EmitIr => buf.write_fmt(format_args!("{}", func)).unwrap(),
+    //         _ => match CFG.target {
+    //             Target::x86 => {
+    //                 // let mut emitter = x86::Emitter::new();
+    //                 // let func = emitter.translate_func(func);
+    //                 // buf.write_fmt(format_args!("{func}")).unwrap();
+    //             }
+    //         },
+    //     }
+    // }
+    //
+    // match CFG.action {
+    //     Action::EmitIr | Action::EmitAsm => {
+    //         if CFG.output == "-" {
+    //             println!("{buf}");
+    //         } else {
+    //             std::fs::write(&CFG.output, &buf).unwrap();
+    //         }
+    //         return;
+    //     }
+    //
+    //     Action::CompileOnly => {
+    //         if CFG.output == "-" {
+    //             die!("Can only output to stdout when emitting assembly or IR (see -S or -E)");
+    //         }
+    //         let asm = tempfile::NamedTempFile::new().unwrap();
+    //
+    //         std::fs::write(asm.path(), &buf).unwrap();
+    //
+    //         let status = Command::new("nasm")
+    //             .arg("-felf64")
+    //             .arg(asm.path())
+    //             .arg("-o")
+    //             .arg(&CFG.output)
+    //             .status()
+    //             .unwrap();
+    //
+    //         if !status.success() {
+    //             die!("assembly failed");
+    //         }
+    //
+    //         return;
+    //     }
+    //
+    //     Action::AssembleAndLink => {
+    //         if CFG.output == "-" {
+    //             die!("Can only output to stdout when emitting assembly or IR (see -S or -E)");
+    //         }
+    //         let asm = tempfile::NamedTempFile::new().unwrap();
+    //         let obj = tempfile::NamedTempFile::new().unwrap();
+    //
+    //         std::fs::write(asm.path(), &buf).unwrap();
+    //
+    //         let status = Command::new("nasm")
+    //             .arg("-felf64")
+    //             .arg(asm.path())
+    //             .arg("-o")
+    //             .arg(obj.path())
+    //             .status()
+    //             .unwrap();
+    //
+    //         if !status.success() {
+    //             die!("assembling failed");
+    //         }
+    //
+    //         let status = Command::new("mold")
+    //             .arg(obj.path())
+    //             .arg("runtime/rt.o")
+    //             .arg("-o")
+    //             .arg(&CFG.output)
+    //             .status()
+    //             .unwrap();
+    //
+    //         if !status.success() {
+    //             die!("linking failed");
+    //         }
+    //     }
+    // }
 }
 
 #[allow(nonstandard_style)]

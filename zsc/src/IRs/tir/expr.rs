@@ -14,7 +14,7 @@ impl TirExpr {
 
     pub fn is_valid_lvalue(&self) -> bool {
         match self.kind {
-            TirExprKind::Ident(..) | TirExprKind::Deref { .. } | TirExprKind::Index { .. } => true,
+            TirExprKind::Ident(..) | TirExprKind::Deref { .. } => true,
             _ => false,
         }
     }
@@ -27,40 +27,30 @@ pub enum TirExprKind {
     Bool(bool),
     Ident(Symbol),
     Assign {
-        lhs: Box<Spanned<TirExpr>>,
-        rhs: Box<Spanned<TirExpr>>,
+        lhs: Box<TirExpr>,
+        rhs: Box<TirExpr>,
     },
     AddrOf {
-        rhs: Box<Spanned<TirExpr>>,
-    },
-    SizeOfTy {
-        ty: Spanned<TypeId>,
-    },
-    SizeOfExpr {
-        expr: Box<Spanned<TirExpr>>,
+        rhs: Box<TirExpr>,
     },
     Deref {
-        rhs: Box<Spanned<TirExpr>>,
-    },
-    Index {
-        expr: Box<Spanned<TirExpr>>,
-        index: Box<Spanned<TirExpr>>,
+        target: Box<TirExpr>,
     },
     Un {
         op: UnOp,
-        rhs: Box<Spanned<TirExpr>>,
+        rhs: Box<TirExpr>,
     },
     Bin {
         op: BinOp,
-        lhs: Box<Spanned<TirExpr>>,
-        rhs: Box<Spanned<TirExpr>>,
+        lhs: Box<TirExpr>,
+        rhs: Box<TirExpr>,
     },
     Cast {
-        target_ty: Spanned<TypeId>,
-        rhs: Box<Spanned<TirExpr>>,
+        target_ty: TypeId,
+        rhs: Box<TirExpr>,
     },
     Call {
-        callee: Box<Spanned<TirExpr>>,
-        args: Vec<Spanned<TirExpr>>,
+        callee: Box<TirExpr>,
+        args: Vec<TirExpr>,
     },
 }

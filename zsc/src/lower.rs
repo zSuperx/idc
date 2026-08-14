@@ -1,43 +1,13 @@
-use std::collections::HashMap;
+use crate::ast::{BinOp, Type};
+use crate::aux::SymbolKind;
+use crate::{CFG, die};
+use crate::{IRs::lir::*, IRs::tir::*, aux::Compiler};
 
-use crate::{IRs::tir::*, arch::lir::*, ast::*, aux::Compiler};
-
-use crate::common::*;
-
-#[derive(Debug, Clone, Copy)]
-pub struct IRCursor(&'static str, usize);
-
-#[derive(Debug, Clone)]
-pub struct IRBuilder {
-    cursor: IRCursor,
-    reg_count: usize,
-    block_count: usize,
-    functions: HashMap<&'static str, Vec<BasicBlock<LirInstr>>>,
-    buf: Vec<LirInstr>,
-}
-
-impl IRBuilder {
-    pub fn get_cursor(&self) -> IRCursor {
-        self.cursor
-    }
-
-    pub fn create_function(&mut self, name: &'static str) {
-        let None = self.functions.insert(name, Vec::new()) else {
-            panic!()
-        };
-
-        self.cursor = IRCursor(name, 0);
-    }
-
-    pub fn verify(&self) {}
-}
+use crate::IRs::lir::LirInstr::*;
+use crate::common::IRBuilder;
 
 impl Compiler {
-    pub fn lower_func(
-        &mut self,
-        builder: &mut IRBuilder,
-        Spanned { inner: obj, span }: Spanned<TirObj>,
-    ) {
+    pub fn lower_func(&mut self, builder: &mut IRBuilder, obj: &TirObj) {
         match obj {
             TirObj::Fn {
                 name,
@@ -45,56 +15,262 @@ impl Compiler {
                 args,
                 body,
             } => {
-                builder.create_function(name.inner.lookup().clone().leak());
-                self.lower_stmt(builder, *body);
+                let function_name = self.current_function.unwrap().lookup().clone().leak();
+                builder.create_function(function_name);
+
+                for (sym, info) in self.get_local_symbols_mut() {
+                    let val = match info.kind {
+                        SymbolKind::Local => {
+                            let dst = builder.next_mem();
+                            builder.emit(Alloca(info.ty, dst));
+                            dst
+                        }
+                        SymbolKind::Arg(i) => {
+                            if info.address_taken {
+                                let dst = builder.next_mem();
+                                builder.emit(Alloca(info.ty, dst));
+                                dst
+                            } else {
+                                Value::arg(i)
+                            }
+                        }
+                        _ => panic!("What"),
+                    };
+
+                    if CFG.verbose {
+                        builder.emit(Comment(format!("{val} <- {sym}")));
+                    }
+                    info.value = Some(val);
+                }
+
+                self.lower_stmt(builder, body);
+                if !builder.verify(function_name, *returns.lookup() != Type::Void) {
+                    die!(
+                        "Control flow reaches end of non-void function: {}",
+                        self.lookup_symbol(*name).raw_name
+                    );
+                }
             }
             TirObj::Global { lhs, rhs } => todo!(),
             TirObj::Struct { name, fields } => todo!(),
         }
     }
 
-    fn lower_stmt(
-        &mut self,
-        builder: &mut IRBuilder,
-        Spanned { inner: stmt, span }: Spanned<TirStmt>,
-    ) {
+    fn lower_stmt(&mut self, builder: &mut IRBuilder, stmt: &TirStmt) {
         match stmt {
             TirStmt::Let { lhs, ty, rhs } => {
                 let rhs_val = self.lower_expr(builder, rhs);
-                let loc = &self.lookup_symbol(lhs.inner).value;
-                if !loc.is_mem() {
-                    die!("Let bindings can only bind to memory slots");
+                let info = self.lookup_symbol(*lhs);
+                let dst = info.value.expect("Symbol doesn't have value");
+                let ty = info.ty;
+                builder.emit(Store(ty, dst, rhs_val));
+            }
+            TirStmt::While { cond, body } => {
+                let function_name = builder.get_current_function();
+
+                let cond_block = builder.create_blockn(function_name, "loopcond");
+                let body_block = builder.create_blockn(function_name, "loopbody");
+                let end_block = builder.create_blockn(function_name, "loopend");
+
+                // Finish current block, add cond as successor
+                builder.emit(Jmp(cond_block));
+                builder.add_successors(&[cond_block]);
+
+                // Lower the cond expr
+                builder.set_insert_point(cond_block);
+                let cond_val = self.lower_expr(builder, cond);
+
+                // Cond can jump to body and post-loop blocks
+                builder.emit_br(self.add_type(Type::Bool), cond_val, body_block, end_block);
+                builder.add_successors(&[body_block, end_block]);
+
+                // Lower the body stmt
+                self.loop_labels.push((cond_block, end_block));
+                builder.set_insert_point(body_block);
+                self.lower_stmt(builder, body);
+                self.loop_labels.pop();
+
+                // Body always jumps to cond
+                builder.emit(Jmp(cond_block));
+                builder.add_successors(&[cond_block]);
+
+                // Enter the post-loop block
+                builder.set_insert_point(end_block);
+            }
+            TirStmt::Continue => {
+                let Some((cond_block, _end_block)) = self.loop_labels.last() else {
+                    die!("Continue statements can only be called within loops.");
+                };
+                builder.emit(Jmp(*cond_block));
+            }
+            TirStmt::Break => {
+                let Some((_cond_block, end_block)) = self.loop_labels.last() else {
+                    die!("Continue statements can only be called within loops.");
+                };
+                builder.emit(Jmp(*end_block));
+            }
+            TirStmt::If { cond, then_, else_ } => {
+                let function_name = builder.get_current_function();
+
+                let then_block = builder.create_blockn(function_name, "then");
+                let else_block = builder.create_blockn(function_name, "else");
+                let join_block = builder.create_blockn(function_name, "endif");
+
+                // Lower the cond expr
+                let cond_val = self.lower_expr(builder, cond);
+
+                // Cond can jump to either then or else
+                builder.emit_br(self.add_type(Type::Bool), cond_val, then_block, else_block);
+                builder.add_successors(&[then_block, else_block]);
+
+                // Lower then stmt
+                builder.set_insert_point(then_block);
+                self.lower_stmt(builder, then_);
+
+                // Then always jumps to join
+                builder.emit(Jmp(join_block));
+                builder.add_successors(&[join_block]);
+
+                // Lower else stmt
+                builder.set_insert_point(else_block);
+                self.lower_stmt(builder, else_);
+
+                // Else always jumps to join
+                builder.emit(Jmp(join_block));
+                builder.add_successors(&[join_block]);
+
+                // Enter the join block
+                builder.set_insert_point(join_block);
+            }
+            TirStmt::Return(Some(expr)) => {
+                let ret_val = self.lower_expr(builder, expr);
+                builder.emit(Ret(expr.ty, ret_val));
+            }
+            TirStmt::Return(None) => {
+                builder.emit(Retv);
+            }
+            TirStmt::Block(stmts) => {
+                for s in stmts {
+                    self.lower_stmt(builder, s);
                 }
             }
-            TirStmt::While { cond, body } => todo!(),
-            TirStmt::Continue => todo!(),
-            TirStmt::Break => todo!(),
-            TirStmt::If { cond, then_, else_ } => todo!(),
-            TirStmt::Return(spanned) => todo!(),
-            TirStmt::Block(spanneds) => todo!(),
-            TirStmt::Expr(spanned) => todo!(),
+            TirStmt::Expr(expr) => {
+                self.lower_expr(builder, expr);
+            }
         }
     }
 
-    fn lower_expr(
-        &mut self,
-        builder: &mut IRBuilder,
-        Spanned { inner: expr, span }: Spanned<TirExpr>,
-    ) -> Value {
-        match expr.kind {
+    fn lower_expr(&mut self, builder: &mut IRBuilder, expr: &TirExpr) -> Value {
+        match &expr.kind {
             TirExprKind::Void => todo!(),
-            TirExprKind::Num(val) => Value::imm(val, expr.ty.lookup().size()),
-            TirExprKind::Bool(val) => Value::imm(val.into(), expr.ty.lookup().size()),
-            TirExprKind::Ident(symbol) => todo!(),
-            TirExprKind::Assign { lhs, rhs } => todo!(),
-            TirExprKind::AddrOf { rhs } => todo!(),
-            TirExprKind::SizeOfTy { ty } => todo!(),
-            TirExprKind::SizeOfExpr { expr } => todo!(),
-            TirExprKind::Deref { rhs } => todo!(),
-            TirExprKind::Index { expr, index } => todo!(),
+            TirExprKind::Num(val) => Value::imm(*val),
+            TirExprKind::Bool(val) => Value::imm((*val).into()),
+            TirExprKind::Ident(symbol) => {
+                let info = self.lookup_symbol(*symbol);
+                let val = info.value.expect("Symbol doesn't have value");
+                if val.is_mem() {
+                    let dst = builder.next_reg();
+                    builder.emit(Load(info.ty, dst, val));
+                    dst
+                } else {
+                    val
+                }
+            }
+            TirExprKind::Assign { lhs, rhs } => match &lhs.kind {
+                TirExprKind::Ident(symbol) => {
+                    let rhs_val = self.lower_expr(builder, rhs);
+                    let info = self.lookup_symbol(*symbol);
+                    let lhs_val = info.value.unwrap();
+                    match info.kind {
+                        SymbolKind::Local => builder.emit(Store(info.ty, lhs_val, rhs_val)),
+                        SymbolKind::Arg(_) => builder.emit(Copy(lhs_val, rhs_val)),
+                        _ => panic!(),
+                    };
+                    lhs_val
+                }
+                TirExprKind::Deref { target } => {
+                    let target_val = self.lower_expr(builder, &target);
+                    let rhs_val = self.lower_expr(builder, rhs);
+                    builder.emit(Store(target.ty.get_pointee(), target_val, rhs_val));
+                    rhs_val
+                }
+                _ => {
+                    let lhs_val = self.lower_expr(builder, lhs);
+                    let rhs_val = self.lower_expr(builder, rhs);
+                    builder.emit(Copy(lhs_val, rhs_val));
+                    lhs_val
+                }
+            },
+            TirExprKind::AddrOf { rhs } => {
+                let dst = self.lower_expr(builder, &rhs);
+                if !dst.is_mem() {
+                    die!("Address-of yielded non-address value: {dst}");
+                }
+                dst
+            }
+            TirExprKind::Deref { target } => {
+                let target_val = self.lower_expr(builder, target);
+                let dst = builder.next_reg();
+                builder.emit(Load(target.ty.get_pointee(), dst, target_val));
+                dst
+            }
             TirExprKind::Un { op, rhs } => todo!(),
-            TirExprKind::Bin { op, lhs, rhs } => todo!(),
-            TirExprKind::Cast { target_ty, rhs } => todo!(),
+            TirExprKind::Bin { op, lhs, rhs } => {
+                let ty = lhs.ty;
+                let lhs_val = self.lower_expr(builder, &lhs);
+                let rhs_val = self.lower_expr(builder, &rhs);
+                match op {
+                    BinOp::Add => {
+                        let result = builder.next_reg();
+                        builder.emit(Add(ty, result, lhs_val, rhs_val));
+                        result
+                    }
+                    BinOp::Sub => {
+                        let result = builder.next_reg();
+                        builder.emit(Sub(ty, result, lhs_val, rhs_val));
+                        result
+                    }
+                    BinOp::Mul => {
+                        let result = builder.next_reg();
+                        if lhs.ty.is_signed() {
+                            builder.emit(Smul(ty, result, lhs_val, rhs_val));
+                        } else {
+                            builder.emit(Umul(ty, result, lhs_val, rhs_val));
+                        }
+                        result
+                    }
+                    BinOp::Div => todo!(),
+                    BinOp::Eq => {
+                        let result = builder.next_reg();
+                        let ty = self.add_type(Type::Bool);
+                        builder.emit(Eq(ty, result, lhs_val, rhs_val));
+                        result
+                    }
+                    BinOp::Le => todo!(),
+                    BinOp::Lt => todo!(),
+                    BinOp::Ge => todo!(),
+                    BinOp::Gt => {
+                        let result = builder.next_reg();
+                        let ty = self.add_type(Type::Bool);
+                        if lhs.ty.is_signed() {
+                            builder.emit(Sgt(ty, result, lhs_val, rhs_val));
+                        } else {
+                            builder.emit(Sgt(ty, result, lhs_val, rhs_val));
+                        }
+                        result
+                    }
+                }
+            }
+            TirExprKind::Cast { target_ty, rhs } => {
+                let rhs_val = self.lower_expr(builder, rhs);
+                let dst = builder.next_reg();
+                if target_ty.bits() < rhs.ty.bits() {
+                    builder.emit(Trunc(*target_ty, dst, rhs_val))
+                } else {
+                    todo!()
+                }
+                dst
+            }
             TirExprKind::Call { callee, args } => todo!(),
         }
     }
@@ -404,7 +580,3 @@ impl Compiler {
 //         }
 //     }
 // }
-
-fn is_ret(i: &LirInstr) -> bool {
-    matches!(i, LirInstr::Ret(..) | LirInstr::Retv)
-}

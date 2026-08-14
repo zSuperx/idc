@@ -26,7 +26,7 @@ impl Compiler {
                 args,
                 body,
             } => {}
-            HirObj::Global { lhs, rhs } => {}
+            HirObj::Global { name, ty, rhs } => {}
             HirObj::Struct { name, fields } => {
                 self.add_type(Type::Base(name.inner));
             }
@@ -43,10 +43,10 @@ impl Compiler {
             } => {
                 let mut arg_types = vec![];
                 for (_, ty) in args.iter() {
-                    let resolved_ty = self.check_type(ty.clone());
-                    arg_types.push(resolved_ty.inner);
+                    let resolved_ty = self.check_type(ty);
+                    arg_types.push(resolved_ty);
                 }
-                let return_ty = self.check_type(returns.clone()).inner;
+                let return_ty = self.check_type(returns);
                 let function_ty = Type::Function {
                     args: arg_types,
                     returns: return_ty,
@@ -54,7 +54,7 @@ impl Compiler {
                 let ty_id = self.add_type(function_ty);
                 self.add_global_symbol(name.clone(), ty_id, SymbolKind::Function);
             }
-            HirObj::Global { lhs, rhs } => {
+            HirObj::Global { name, ty, rhs } => {
                 todo!()
             }
             HirObj::Struct { name, fields } => {}

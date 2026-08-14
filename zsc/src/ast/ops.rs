@@ -13,19 +13,39 @@ pub enum BinOp {
     Gt,
 }
 
+impl BinOp {
+    pub fn is_arithmetic(&self) -> bool {
+        matches!(self, BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div)
+    }
+
+    pub fn is_ptr_arithmetic(&self) -> bool {
+        matches!(self, BinOp::Add | BinOp::Sub)
+    }
+
+    pub fn is_logical(&self) -> bool {
+        matches!(
+            self,
+            BinOp::Eq | BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt
+        )
+    }
+
+    pub fn is_ordered(&self) -> bool {
+        matches!(self, BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt)
+    }
+}
+
 impl std::fmt::Display for BinOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        #[rustfmt::skip]
         let s = match self {
             BinOp::Add => "+",
             BinOp::Sub => "-",
             BinOp::Mul => "*",
             BinOp::Div => "/",
-            BinOp::Eq  => "==",
-            BinOp::Le  => "<=",
-            BinOp::Lt  => "<",
-            BinOp::Ge  => ">=",
-            BinOp::Gt  => ">",
+            BinOp::Eq => "==",
+            BinOp::Le => "<=",
+            BinOp::Lt => "<",
+            BinOp::Ge => ">=",
+            BinOp::Gt => ">",
         };
         f.write_str(s)
     }

@@ -4,10 +4,7 @@ use crate::common::*;
 use crate::{ast::*, aux::Compiler};
 
 impl Compiler {
-    pub fn check_type(
-        &mut self,
-        s @ Spanned { inner: ty, span }: Spanned<TypeId>,
-    ) -> Spanned<TypeId> {
+    pub fn check_type(&mut self, s @ Spanned { inner: ty, span }: &Spanned<TypeId>) -> TypeId {
         let ty = match ty.lookup() {
             Type::Unresolved(name) => {
                 let Some(id) = self.type_names.get(name) else {
@@ -17,15 +14,15 @@ impl Compiler {
             }
             Type::Function { args, returns } => todo!(),
             Type::Pointer(id) => {
-                let inner_ty = self.check_type(Spanned::new(*id, span)).inner;
+                let inner_ty = self.check_type(&Spanned::new(*id, *span));
                 self.add_type(Type::Pointer(inner_ty))
             }
-            x => return s,
+            _ => return s.inner,
         };
-        Spanned::new(ty, span)
+        ty
     }
 
-    pub fn check_obj(&mut self, Spanned { inner: obj, span }: Spanned<HirObj>) -> Spanned<TirObj> {
+    pub fn check_obj(&mut self, Spanned { inner: obj, span }: Spanned<HirObj>) -> TirObj {
         let inner = match obj {
             HirObj::Fn {
                 name,
@@ -34,98 +31,139 @@ impl Compiler {
                 body,
                 ..
             } => {
-                let function_symbol = self.env.get_first(&name.inner).unwrap();
-                self.func.symbol = Some(function_symbol);
-                self.func.raw_name = name;
-
+                self.current_function = self.env.get_first(&name.inner);
+                self.functions
+                    .insert(self.current_function.unwrap(), Default::default());
                 self.env.push_scope();
                 let mut checked_args = vec![];
                 for (i, (argname, ty)) in args.into_iter().enumerate() {
-                    let var_ty = self.check_type(ty);
-                    if *var_ty.inner == Type::Void {
+                    let var_ty = self.check_type(&ty);
+                    if *var_ty == Type::Void {
                         die!("Function argument cannot have type {var_ty}");
                     }
 
-                    let argsym = self.add_local_symbol(argname, var_ty.inner, SymbolKind::Param(i));
+                    let argsym = self.add_local_symbol(argname, var_ty, SymbolKind::Arg(i));
 
                     checked_args.push((argsym, var_ty));
                 }
-                let returns = self.check_type(returns);
+                let returns = self.check_type(&returns);
 
                 let body = Box::new(self.check_stmt(*body));
                 self.env.pop_scope();
                 TirObj::Fn {
-                    name: Spanned::new(function_symbol, span),
+                    name: self.current_function.unwrap(),
                     returns,
                     body,
                     args: checked_args,
                 }
             }
-            HirObj::Global { lhs, rhs } => todo!(),
+            HirObj::Global { name, ty, rhs } => todo!(),
             HirObj::Struct { name, fields } => todo!(),
         };
-        Spanned::new(inner, span)
+        inner
     }
 
-    fn check_stmt(&mut self, Spanned { inner: stmt, span }: Spanned<HirStmt>) -> Spanned<TirStmt> {
+    fn check_stmt(&mut self, Spanned { inner: stmt, span }: Spanned<HirStmt>) -> TirStmt {
         let kind = match stmt {
             HirStmt::Let { lhs, ty, rhs } => {
-                let ty = ty.map(|t| self.check_type(t));
-                let rhs = self.check_expr(rhs, ty.map(|t| t.inner));
+                let ty = ty.map(|t| self.check_type(&t));
+                let checked_rhs = self.check_expr(&rhs, ty.map(|t| t));
 
                 if let Some(ty) = ty
-                    && ty.inner != rhs.inner.ty
+                    && ty != checked_rhs.ty
                 {
                     die!(
                         "Type mismatch. Expected {ty} \n...but got `{}`: {}",
-                        rhs.inner.ty,
-                        rhs.span,
+                        checked_rhs.ty,
+                        span,
                     );
                 }
-                let var_ty = rhs.inner.ty;
+                let var_ty = checked_rhs.ty;
 
                 let lhs_symbol = self.add_local_symbol(lhs, var_ty, SymbolKind::Local);
 
                 TirStmt::Let {
                     lhs: lhs_symbol,
                     ty,
-                    rhs,
+                    rhs: checked_rhs,
                 }
             }
-            HirStmt::While { cond, body } => todo!(),
-            HirStmt::Continue => todo!(),
-            HirStmt::Break => todo!(),
-            HirStmt::If { cond, then_, else_ } => {
-                let cond = self.check_expr(cond, None);
-                let cond_ty = cond.inner.ty;
+            HirStmt::While { cond, body } => {
+                let checked_cond = self.check_expr(&cond, None);
+                let cond_ty = checked_cond.ty;
                 if *cond_ty != Type::Bool {
                     die!(
                         "Type mismatch. Expected `{}` but got `{}`: {}",
                         Type::Bool,
                         cond_ty,
-                        cond.span
+                        span
                     )
                 }
-                let then_ = Box::new(self.check_stmt(*then_));
-                let else_ = Box::new(self.check_stmt(*else_));
-                TirStmt::If { cond, then_, else_ }
+                self.env.push_scope();
+                self.loop_depth += 1;
+                let checked_body = self.check_stmt(*body);
+                self.loop_depth -= 1;
+                self.env.push_scope();
+                TirStmt::While {
+                    cond: checked_cond,
+                    body: Box::new(checked_body),
+                }
+            }
+            HirStmt::Continue => {
+                if self.loop_depth > 0 {
+                    TirStmt::Continue
+                } else {
+                    die!("Continue statements can only be used inside a loop body: {span}");
+                }
+            }
+            HirStmt::Break => {
+                if self.loop_depth > 0 {
+                    TirStmt::Break
+                } else {
+                    die!("Break statements can only be used inside a loop body: {span}");
+                }
+            }
+            HirStmt::If { cond, then_, else_ } => {
+                let checked_cond = self.check_expr(&cond, None);
+                let cond_ty = checked_cond.ty;
+                if *cond_ty != Type::Bool {
+                    die!(
+                        "Type mismatch. Expected `{}` but got `{}`: {}",
+                        Type::Bool,
+                        cond_ty,
+                        span
+                    )
+                }
+                let checked_then = Box::new(self.check_stmt(*then_));
+                let checked_else = Box::new(self.check_stmt(*else_));
+                TirStmt::If {
+                    cond: checked_cond,
+                    then_: checked_then,
+                    else_: checked_else,
+                }
             }
             HirStmt::Return(val) => {
                 let Type::Function { returns, .. } =
-                    *self.lookup_symbol(self.current_function()).ty
+                    *self.lookup_symbol(self.current_function.unwrap()).ty
                 else {
                     panic!("Function with non-function type");
                 };
-                let checked_val = self.check_expr(val, Some(returns));
-                if checked_val.inner.ty != returns {
+
+                let checked_val = self.check_expr(&val, Some(returns));
+                if checked_val.ty != returns {
                     die!(
-                        "Mismatched return type. Function {} expects {returns} but got {}: {}",
-                        self.func.raw_name,
-                        checked_val.inner.ty,
-                        checked_val.span
+                        "Mismatched return type. Function expects {returns} but got {}: {} {}",
+                        checked_val.ty,
+                        self.get_current_function_info().raw_name,
+                        span
                     )
                 }
-                TirStmt::Return(checked_val)
+
+                if *returns == Type::Void {
+                    TirStmt::Return(None)
+                } else {
+                    TirStmt::Return(Some(checked_val))
+                }
             }
             HirStmt::Block(s) => {
                 self.env.push_scope();
@@ -134,19 +172,19 @@ impl Compiler {
                 stmt
             }
             HirStmt::Expr(e) => {
-                let e = self.check_expr(e, None);
+                let e = self.check_expr(&e, None);
                 TirStmt::Expr(e)
             }
         };
-        // Inherit the same span from the previous phase
-        Spanned::new(kind, span)
+
+        kind
     }
 
     fn check_expr(
         &mut self,
-        Spanned { inner: expr, span }: Spanned<HirExpr>,
+        Spanned { inner: expr, span }: &Spanned<HirExpr>,
         hint: Option<TypeId>,
-    ) -> Spanned<TirExpr> {
+    ) -> TirExpr {
         let inner = match expr {
             HirExpr::Void => {
                 let kind = TirExprKind::Void;
@@ -155,8 +193,7 @@ impl Compiler {
             HirExpr::Num(int_str) => {
                 let ty = match hint {
                     Some(hint_id) => {
-                        let hint_ty = hint_id;
-                        if hint_ty.is_integral() {
+                        if hint_id.is_integral() {
                             hint_id
                         } else {
                             self.add_type(Type::I32)
@@ -185,7 +222,7 @@ impl Compiler {
             }
             HirExpr::Bool(b) => {
                 let ty = self.add_type(Type::Bool);
-                let kind = TirExprKind::Bool(b);
+                let kind = TirExprKind::Bool(*b);
                 TirExpr::new(kind, ty)
             }
             HirExpr::Ident(i) => {
@@ -197,18 +234,18 @@ impl Compiler {
                 TirExpr::new(kind, *ty)
             }
             HirExpr::Assign { lhs, rhs } => {
-                let checked_lhs = self.check_expr(*lhs, hint);
-                let lhs_ty = checked_lhs.inner.ty;
-                let checked_rhs = self.check_expr(*rhs, Some(lhs_ty));
-                let rhs_ty = checked_rhs.inner.ty;
+                let checked_lhs = self.check_expr(lhs, hint);
+                let lhs_ty = checked_lhs.ty;
+                let checked_rhs = self.check_expr(rhs, Some(lhs_ty));
+                let rhs_ty = checked_rhs.ty;
                 if lhs_ty != rhs_ty {
                     die!("Cannot assign a `{rhs_ty}` to `{lhs_ty}`: {span}")
                 }
                 // TODO: add a new pass for this
-                if !checked_lhs.inner.is_valid_lvalue() {
+                if !checked_lhs.is_valid_lvalue() {
                     die!(
                         "Cannot assign to this expression as it is not a valid LVALUE: {}",
-                        checked_lhs.span,
+                        span,
                     )
                 }
                 let ty = lhs_ty;
@@ -218,72 +255,24 @@ impl Compiler {
                 };
                 TirExpr::new(kind, ty)
             }
-            HirExpr::Index { expr, index } => {
-                // x[i] => *(x + i * sizeof(*x))
-                // TODO: change this to lower indexing manually. Don't convert it to just dererf
-                // arithmetic, a lot of information ends up getting lost
-                // Instead, change the LirVal::Mem API to include base reg, offset reg, scale imm
-                // and displacement imm
-                // This is in hopes of emitting a physical instruction like [rbx + rax * 8 + 1]
-                let expr = self.check_expr(*expr, None);
-                let u64_ty = self.add_type(Type::U64);
-                let index = self.check_expr(*index, Some(u64_ty));
-                let index_ty = index.inner.ty;
-                if *index_ty != Type::U64 {
-                    die!("Cannot index a pointer with a {index_ty}. Use a u64 instead: {index}")
+            HirExpr::Index { base, index } => {
+                // If pointer arithmetic is set in place, index can just become:
+                // x[i] => *(x + i)
+                let checked_expr = self.check_expr(base, None);
+                let hint_ty = self.add_type(Type::U64);
+                let checked_index = self.check_expr(index, Some(hint_ty));
+                if !checked_expr.ty.is_pointer() {
+                    die!("Can't index into a {} type: {span}", checked_index.ty);
                 }
-                let Type::Pointer(elem_ty) = *expr.inner.ty else {
-                    die!("Cannot index a non-pointer type {}: {expr}", expr.inner.ty)
+                if !checked_index.ty.is_integral() {
+                    die!("Can't index using a {} type: {span}", checked_index.ty);
+                }
+                let deref_target = self.scale_ptr_int_math(checked_expr, BinOp::Add, checked_index);
+                let ty = deref_target.ty.get_pointee();
+                let kind = TirExprKind::Deref {
+                    target: Box::new(deref_target),
                 };
-                let span = expr.span;
-                let sizeof = Spanned::new(
-                    TirExpr::new(TirExprKind::Num(elem_ty.size() as i128), u64_ty),
-                    span,
-                );
-                let mul = Spanned::new(
-                    TirExpr::new(
-                        TirExprKind::Bin {
-                            op: BinOp::Mul,
-                            lhs: Box::new(index),
-                            rhs: Box::new(sizeof),
-                        },
-                        u64_ty,
-                    ),
-                    span,
-                );
-                let cast_ptr_to_u64 = Spanned::new(
-                    TirExpr::new(
-                        TirExprKind::Cast {
-                            target_ty: Spanned::new(u64_ty, span),
-                            rhs: Box::new(expr),
-                        },
-                        u64_ty,
-                    ),
-                    span,
-                );
-                let add = Spanned::new(
-                    TirExpr::new(
-                        TirExprKind::Bin {
-                            op: BinOp::Add,
-                            lhs: Box::new(cast_ptr_to_u64),
-                            rhs: Box::new(mul),
-                        },
-                        u64_ty,
-                    ),
-                    span,
-                );
-                let cast_to_elem_ty = Spanned::new(
-                    TirExpr::new(
-                        TirExprKind::Cast {
-                            target_ty: Spanned::new(elem_ty, span),
-                            rhs: Box::new(add.clone()),
-                        },
-                        elem_ty,
-                    ),
-                    span,
-                );
-                let kind = TirExprKind::Deref { rhs: Box::new(add) };
-                TirExpr::new(kind, elem_ty)
+                TirExpr::new(kind, ty)
             }
             HirExpr::Deref { rhs } => {
                 // If we get a hint of *T, the sub-expr should be checked with hint T
@@ -292,37 +281,35 @@ impl Compiler {
                     _ => None,
                 });
                 // We don't want to check the inner expression yet. First check its kind
-                match rhs.inner {
+                match &rhs.inner {
                     // If we're dereferencing an addrof, they cancel out
                     // e.g. (*&y == y). In this case, pull out the AddrOf's sub-expr
                     // and check it separately. We do this to avoid the AddrOf book-keeping code
-                    HirExpr::AddrOf { rhs } => self.check_expr(*rhs, hint_inner).inner,
+                    HirExpr::AddrOf { rhs } => self.check_expr(&rhs, hint_inner),
                     _ => {
-                        let checked_rhs = Box::new(self.check_expr(*rhs, hint_inner));
-                        let checked_ty = checked_rhs.inner.ty;
+                        let checked_rhs = Box::new(self.check_expr(rhs, hint_inner));
+                        let checked_ty = checked_rhs.ty;
                         // A deref can only happen on a pointer, and its type will be whatever
                         // the pointer is pointing to
                         let ty = match checked_ty.lookup() {
                             Type::Pointer(id) => *id,
-                            _ => die!(
-                                "Cannot dereference non-pointer type `{checked_ty}`: {checked_rhs}"
-                            ),
+                            _ => die!("Cannot dereference non-pointer type {span}"),
                         };
-                        let kind = TirExprKind::Deref { rhs: checked_rhs };
+                        let kind = TirExprKind::Deref { target: checked_rhs };
                         TirExpr::new(kind, ty)
                     }
                 }
             }
             HirExpr::AddrOf { rhs } => {
                 // We don't want to check the inner expression yet. First check its kind
-                match rhs.inner {
+                match &rhs.inner {
                     // AddrOf is kind of a ty-expression. It can ONLY operate on
                     // named values. The exception is AddrOf(Deref(...)), but...
                     HirExpr::Ident(..) => {
                         // If Ident, perform the official check
-                        let checked_rhs = Box::new(self.check_expr(*rhs, hint));
-                        let rhs_ty = checked_rhs.inner.ty;
-                        let TirExprKind::Ident(var_symbol) = checked_rhs.inner.kind else {
+                        let checked_rhs = Box::new(self.check_expr(rhs, hint));
+                        let rhs_ty = checked_rhs.ty;
+                        let TirExprKind::Ident(var_symbol) = checked_rhs.kind else {
                             unreachable!("rhs was shown to be an Ident")
                         };
 
@@ -337,7 +324,7 @@ impl Compiler {
                         TirExpr::new(kind, ty)
                     }
                     // ... if we're taking address of a dereference, they cancel out e.g. (&*y == y)
-                    HirExpr::Deref { rhs } => self.check_expr(*rhs, hint).inner,
+                    HirExpr::Deref { rhs } => self.check_expr(&rhs, hint),
                     _ => die!("Cannot take the address of this type of expression: {rhs}"),
                 }
             }
@@ -347,8 +334,8 @@ impl Compiler {
                 // - Same sized types (this means all pointers can be cast to and from each other)
                 // - Any primitive with any other primitive
                 let checked_ty = self.check_type(target_ty);
-                let checked_rhs = Box::new(self.check_expr(*rhs, Some(checked_ty.inner)));
-                let ty = checked_ty.inner;
+                let checked_rhs = Box::new(self.check_expr(rhs, Some(checked_ty)));
+                let ty = checked_ty;
                 let kind = TirExprKind::Cast {
                     target_ty: checked_ty,
                     rhs: checked_rhs,
@@ -356,8 +343,8 @@ impl Compiler {
                 TirExpr::new(kind, ty)
             }
             HirExpr::Un { op, rhs } => {
-                let checked_rhs = self.check_expr(*rhs, hint);
-                let rhs_ty = checked_rhs.inner.ty;
+                let checked_rhs = self.check_expr(rhs, hint);
+                let rhs_ty = checked_rhs.ty;
                 let ty = match op {
                     UnOp::Not => {
                         if *rhs_ty != Type::Bool {
@@ -373,67 +360,83 @@ impl Compiler {
                     }
                 };
                 let kind = TirExprKind::Un {
-                    op,
+                    op: *op,
                     rhs: Box::new(checked_rhs),
                 };
                 TirExpr::new(kind, ty)
             }
             HirExpr::Bin { op, lhs, rhs } => {
-                let checked_lhs = self.check_expr(*lhs, hint);
-                let lhs_ty = checked_lhs.inner.ty;
-                let checked_rhs = self.check_expr(*rhs, Some(lhs_ty));
-                let rhs_ty = checked_rhs.inner.ty;
-                let ty = match op {
-                    BinOp::Add => {
-                        if (lhs_ty != rhs_ty) || !lhs_ty.is_integral() {
-                            die!("Cannot add `{lhs_ty}` and `{rhs_ty}`: {span}")
-                        }
-                        lhs_ty
+                let checked_lhs = self.check_expr(lhs, hint);
+                let lhs_ty = checked_lhs.ty;
+                let checked_rhs = self.check_expr(rhs, Some(lhs_ty));
+                let rhs_ty = checked_rhs.ty;
+
+                match (checked_lhs, op, checked_rhs) {
+                    (ptr, BinOp::Sub | BinOp::Add, int) | (int, BinOp::Add, ptr)
+                        if ptr.ty.is_pointer() && int.ty.is_integral() =>
+                    {
+                        self.scale_ptr_int_math(ptr, *op, int)
                     }
-                    BinOp::Sub => {
-                        if (lhs_ty != rhs_ty) || !lhs_ty.is_integral() {
-                            die!("Cannot subtract `{lhs_ty}` and `{rhs_ty}`: {span}")
-                        }
-                        lhs_ty
+                    (ptr1, BinOp::Sub, ptr2) if ptr1.ty.is_pointer() && ptr2.ty == ptr1.ty => {
+                        let ty = self.add_type(Type::U64);
+                        let kind = TirExprKind::Bin {
+                            op: *op,
+                            lhs: Box::new(ptr1),
+                            rhs: Box::new(ptr2),
+                        };
+                        TirExpr::new(kind, ty)
                     }
-                    BinOp::Mul => {
-                        if (lhs_ty != rhs_ty) || !lhs_ty.is_integral() {
-                            die!("Cannot multiply `{lhs_ty}` and `{rhs_ty}`: {span}")
-                        }
-                        lhs_ty
+                    (int1, BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div, int2)
+                        if int1.ty.is_integral() && int2.ty == int1.ty =>
+                    {
+                        let ty = int1.ty;
+                        let kind = TirExprKind::Bin {
+                            op: *op,
+                            lhs: Box::new(int1),
+                            rhs: Box::new(int2),
+                        };
+                        TirExpr::new(kind, ty)
                     }
-                    BinOp::Div => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
-                            die!("Cannot divide `{lhs_ty}` and `{rhs_ty}`: {span}")
-                        }
-                        lhs_ty
+                    (ptr1, BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt, ptr2)
+                        if ptr1.ty.is_pointer() && ptr2.ty == ptr1.ty =>
+                    {
+                        let ty = self.add_type(Type::Bool);
+                        let kind = TirExprKind::Bin {
+                            op: *op,
+                            lhs: Box::new(ptr1),
+                            rhs: Box::new(ptr2),
+                        };
+                        TirExpr::new(kind, ty)
                     }
-                    BinOp::Eq => {
-                        if lhs_ty != rhs_ty {
-                            die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
-                        }
-                        self.add_type(Type::Bool)
+                    (int1, BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt, int2)
+                        if int1.ty.is_integral() && int2.ty == int1.ty =>
+                    {
+                        let ty = self.add_type(Type::Bool);
+                        let kind = TirExprKind::Bin {
+                            op: *op,
+                            lhs: Box::new(int1),
+                            rhs: Box::new(int2),
+                        };
+                        TirExpr::new(kind, ty)
                     }
-                    BinOp::Lt | BinOp::Gt | BinOp::Le | BinOp::Ge => {
-                        if (lhs_ty != rhs_ty) || !(lhs_ty).is_integral() {
-                            die!("Cannot compare `{lhs_ty}` and `{rhs_ty}`: {span}")
-                        }
-                        self.add_type(Type::Bool)
+                    (any1, BinOp::Eq, any2) if any1.ty == any2.ty => {
+                        let ty = self.add_type(Type::Bool);
+                        let kind = TirExprKind::Bin {
+                            op: *op,
+                            lhs: Box::new(any1),
+                            rhs: Box::new(any2),
+                        };
+                        TirExpr::new(kind, ty)
                     }
-                };
-                let kind = TirExprKind::Bin {
-                    op,
-                    lhs: Box::new(checked_lhs),
-                    rhs: Box::new(checked_rhs),
-                };
-                TirExpr::new(kind, ty)
+                    _ => die!("Incompatible operation between {lhs_ty} and {rhs_ty}: {span}"),
+                }
             }
             HirExpr::Call { callee, args } => {
                 // TODO: we can't check if the user is passing in the right types of arguments until
                 // we add the callee to the global symbol table
-                let callee = Box::new(self.check_expr(*callee, hint));
-                let Type::Function { returns, .. } = *callee.inner.ty else {
-                    die!("Function callee does not resolve to a function type: {callee}");
+                let callee = Box::new(self.check_expr(callee, hint));
+                let Type::Function { returns, .. } = *callee.ty else {
+                    die!("Function callee does not resolve to a function type: {span}");
                 };
 
                 let args = args.into_iter().map(|a| self.check_expr(a, None)).collect();
@@ -441,18 +444,41 @@ impl Compiler {
                 TirExpr::new(kind, returns)
             }
             HirExpr::SizeOfTy { ty } => {
-                let ty_size = self.check_type(ty).inner.size();
+                let ty_size = self.check_type(ty).bytes();
                 let kind = TirExprKind::Num(ty_size as i128);
                 let ty = self.add_type(Type::U64);
                 TirExpr::new(kind, ty)
             }
             HirExpr::SizeOfExpr { expr } => {
-                let ty_size = self.check_expr(*expr, None).inner.ty.size();
+                let ty_size = self.check_expr(expr, None).ty.bits();
                 let kind = TirExprKind::Num(ty_size as i128);
                 let ty = self.add_type(Type::U64);
                 TirExpr::new(kind, ty)
             }
         };
-        Spanned::new(inner, span)
+        inner
+    }
+
+    fn scale_ptr_int_math(&mut self, ptr: TirExpr, op: BinOp, int: TirExpr) -> TirExpr {
+        let ptr_ty = ptr.ty;
+        let scaled_int = {
+            let scale = {
+                let pointee_size = ptr.ty.get_pointee().bytes();
+                let kind = TirExprKind::Num(pointee_size as i128);
+                TirExpr::new(kind, self.add_type(Type::U64))
+            };
+            let kind = TirExprKind::Bin {
+                op: BinOp::Mul,
+                lhs: Box::new(int),
+                rhs: Box::new(scale),
+            };
+            TirExpr::new(kind, self.add_type(Type::U64))
+        };
+        let kind = TirExprKind::Bin {
+            op,
+            lhs: Box::new(ptr),
+            rhs: Box::new(scaled_int),
+        };
+        TirExpr::new(kind, ptr_ty)
     }
 }

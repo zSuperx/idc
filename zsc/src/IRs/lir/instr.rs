@@ -8,7 +8,8 @@
 
 use crate::common::*;
 use crate::ast::*;
-use crate::arch::lir::*;
+use crate::backend::*;
+use crate::IRs::lir::*;
 
 #[derive(Debug, Clone)]
 pub enum LirInstr {
@@ -27,22 +28,19 @@ pub enum LirInstr {
 		Uge(TypeId, Value, Value, Value),
 		Ult(TypeId, Value, Value, Value),
 		Ule(TypeId, Value, Value, Value),
-		Arg(TypeId, Value, usize),
-		Call(TypeId, Value),
-		Copy(TypeId, Value, Value),
-		Alloc(TypeId, Value, Symbol),
-		Param(TypeId, Value, Symbol, usize),
-		Sparam(TypeId, Value, Symbol, usize),
+		Comment(String),
+		Call(Value),
+		Copy(Value, Value),
 		Load(TypeId, Value, Value),
 		Store(TypeId, Value, Value),
-		Comment(String),
+		Alloca(TypeId, Value),
 		Sext(TypeId, Value, Value),
 		Zext(TypeId, Value, Value),
 		Trunc(TypeId, Value, Value),
 		Retv,
 		Ret(TypeId, Value),
-		Br(TypeId, Value, BB, BB),
-		Jmp(BB),
+		Br(Value, BBID, BBID),
+		Jmp(BBID),
 }
 
 
@@ -64,21 +62,18 @@ impl std::fmt::Display for LirInstr {
 						Self::Uge(v0, v1, v2, v3) => f.write_fmt(format_args!("uge {v0}, {v1}, {v2}, {v3}")),
 						Self::Ult(v0, v1, v2, v3) => f.write_fmt(format_args!("ult {v0}, {v1}, {v2}, {v3}")),
 						Self::Ule(v0, v1, v2, v3) => f.write_fmt(format_args!("ule {v0}, {v1}, {v2}, {v3}")),
-						Self::Arg(v0, v1, v2) => f.write_fmt(format_args!("arg {v0}, {v1}, {v2}")),
-						Self::Call(v0, v1) => f.write_fmt(format_args!("call {v0}, {v1}")),
-						Self::Copy(v0, v1, v2) => f.write_fmt(format_args!("copy {v0}, {v1}, {v2}")),
-						Self::Alloc(v0, v1, v2) => f.write_fmt(format_args!("alloc {v0}, {v1}, {v2}")),
-						Self::Param(v0, v1, v2, v3) => f.write_fmt(format_args!("param {v0}, {v1}, {v2}, {v3}")),
-						Self::Sparam(v0, v1, v2, v3) => f.write_fmt(format_args!("sparam {v0}, {v1}, {v2}, {v3}")),
+						Self::Comment(v0) => f.write_fmt(format_args!("; {v0}")),
+						Self::Call(v0) => f.write_fmt(format_args!("call {v0}")),
+						Self::Copy(v0, v1) => f.write_fmt(format_args!("copy {v0}, {v1}")),
 						Self::Load(v0, v1, v2) => f.write_fmt(format_args!("load {v0}, {v1}, {v2}")),
 						Self::Store(v0, v1, v2) => f.write_fmt(format_args!("store {v0}, {v1}, {v2}")),
-						Self::Comment(v0) => f.write_fmt(format_args!("; {v0}")),
+						Self::Alloca(v0, v1) => f.write_fmt(format_args!("alloca {v0}, {v1}")),
 						Self::Sext(v0, v1, v2) => f.write_fmt(format_args!("sext {v0}, {v1}, {v2}")),
 						Self::Zext(v0, v1, v2) => f.write_fmt(format_args!("zext {v0}, {v1}, {v2}")),
 						Self::Trunc(v0, v1, v2) => f.write_fmt(format_args!("trunc {v0}, {v1}, {v2}")),
-						Self::Retv => f.write_fmt(format_args!("retv")),
+						Self::Retv => f.write_fmt(format_args!("ret")),
 						Self::Ret(v0, v1) => f.write_fmt(format_args!("ret {v0}, {v1}")),
-						Self::Br(v0, v1, v2, v3) => f.write_fmt(format_args!("br {v0}, {v1}, {v2}, {v3}")),
+						Self::Br(v0, v1, v2) => f.write_fmt(format_args!("br {v0}, {v1}, {v2}")),
 						Self::Jmp(v0) => f.write_fmt(format_args!("jmp {v0}"))
         }
     }
@@ -106,21 +101,18 @@ impl Instr for LirInstr {
 						Self::Uge(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Ult(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
 						Self::Ule(v0, v1, v2, v3) => vec![v2, v3].into_iter(),
-						Self::Arg(v0, v1, v2) => vec![v1].into_iter(),
-						Self::Call(v0, v1) => vec![].into_iter(),
-						Self::Copy(v0, v1, v2) => vec![v2].into_iter(),
-						Self::Alloc(v0, v1, v2) => vec![].into_iter(),
-						Self::Param(v0, v1, v2, v3) => vec![].into_iter(),
-						Self::Sparam(v0, v1, v2, v3) => vec![].into_iter(),
+						Self::Comment(v0) => vec![].into_iter(),
+						Self::Call(v0) => vec![].into_iter(),
+						Self::Copy(v0, v1) => vec![v1].into_iter(),
 						Self::Load(v0, v1, v2) => vec![v2].into_iter(),
 						Self::Store(v0, v1, v2) => vec![v1, v2].into_iter(),
-						Self::Comment(v0) => vec![].into_iter(),
+						Self::Alloca(v0, v1) => vec![].into_iter(),
 						Self::Sext(v0, v1, v2) => vec![v2].into_iter(),
 						Self::Zext(v0, v1, v2) => vec![v2].into_iter(),
 						Self::Trunc(v0, v1, v2) => vec![v2].into_iter(),
 						Self::Retv => vec![].into_iter(),
 						Self::Ret(v0, v1) => vec![v1].into_iter(),
-						Self::Br(v0, v1, v2, v3) => vec![v1].into_iter(),
+						Self::Br(v0, v1, v2) => vec![v0].into_iter(),
 						Self::Jmp(v0) => vec![].into_iter()
         }
     }
@@ -142,21 +134,18 @@ impl Instr for LirInstr {
 						Self::Uge(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Ult(v0, v1, v2, v3) => vec![v1].into_iter(),
 						Self::Ule(v0, v1, v2, v3) => vec![v1].into_iter(),
-						Self::Arg(v0, v1, v2) => vec![].into_iter(),
-						Self::Call(v0, v1) => vec![v1].into_iter(),
-						Self::Copy(v0, v1, v2) => vec![v1].into_iter(),
-						Self::Alloc(v0, v1, v2) => vec![v1].into_iter(),
-						Self::Param(v0, v1, v2, v3) => vec![v1].into_iter(),
-						Self::Sparam(v0, v1, v2, v3) => vec![v1].into_iter(),
+						Self::Comment(v0) => vec![].into_iter(),
+						Self::Call(v0) => vec![v0].into_iter(),
+						Self::Copy(v0, v1) => vec![v0].into_iter(),
 						Self::Load(v0, v1, v2) => vec![v1].into_iter(),
 						Self::Store(v0, v1, v2) => vec![].into_iter(),
-						Self::Comment(v0) => vec![].into_iter(),
+						Self::Alloca(v0, v1) => vec![v1].into_iter(),
 						Self::Sext(v0, v1, v2) => vec![v1].into_iter(),
 						Self::Zext(v0, v1, v2) => vec![v1].into_iter(),
 						Self::Trunc(v0, v1, v2) => vec![v1].into_iter(),
 						Self::Retv => vec![].into_iter(),
 						Self::Ret(v0, v1) => vec![].into_iter(),
-						Self::Br(v0, v1, v2, v3) => vec![].into_iter(),
+						Self::Br(v0, v1, v2) => vec![].into_iter(),
 						Self::Jmp(v0) => vec![].into_iter()
         }
     }
@@ -178,26 +167,23 @@ impl Instr for LirInstr {
 						Self::Uge(v0, v1, v2, v3) => false,
 						Self::Ult(v0, v1, v2, v3) => false,
 						Self::Ule(v0, v1, v2, v3) => false,
-						Self::Arg(v0, v1, v2) => false,
-						Self::Call(v0, v1) => false,
-						Self::Copy(v0, v1, v2) => false,
-						Self::Alloc(v0, v1, v2) => false,
-						Self::Param(v0, v1, v2, v3) => false,
-						Self::Sparam(v0, v1, v2, v3) => false,
+						Self::Comment(v0) => false,
+						Self::Call(v0) => false,
+						Self::Copy(v0, v1) => false,
 						Self::Load(v0, v1, v2) => false,
 						Self::Store(v0, v1, v2) => false,
-						Self::Comment(v0) => false,
+						Self::Alloca(v0, v1) => false,
 						Self::Sext(v0, v1, v2) => false,
 						Self::Zext(v0, v1, v2) => false,
 						Self::Trunc(v0, v1, v2) => false,
 						Self::Retv => true,
 						Self::Ret(v0, v1) => true,
-						Self::Br(v0, v1, v2, v3) => true,
+						Self::Br(v0, v1, v2) => true,
 						Self::Jmp(v0) => true
         }
     }
 
-    fn uncond_jump(bb: BB) -> Self {
+    fn uncond_jump(bb: BBID) -> Self {
         Self::Jmp(bb)
     }
 }

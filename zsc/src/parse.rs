@@ -1,8 +1,8 @@
 use crate::aux::Compiler;
-use crate::{add_str, ast::*};
 use crate::{IRs::hir::*, source};
+use crate::{add_str, ast::*};
 
-use crate::common::*;
+use crate::die;
 
 // Parser implementation
 impl Compiler {
@@ -21,7 +21,23 @@ impl Compiler {
     }
 
     fn parse_global(&mut self) -> Spanned<HirObj> {
-        todo!()
+        let span_start = self.mark();
+        self.expect(Token::Global);
+        let name = {
+            let span_start = self.mark();
+            let raw = self.expect_ident();
+            self.commit(raw, span_start)
+        };
+        self.expect(Token::Colon);
+        let ty = self.parse_type();
+        self.expect(Token::Eq);
+        let rhs = self.parse_expr();
+        let global = HirObj::Global {
+            name,
+            ty,
+            rhs: Box::new(rhs),
+        };
+        self.commit(global, span_start)
     }
 
     fn parse_func(&mut self) -> Spanned<HirObj> {
@@ -265,7 +281,7 @@ impl Compiler {
                 let idx = self.parse_expr();
                 self.expect(Token::RBrack);
                 HirExpr::Index {
-                    expr: Box::new(lhs),
+                    base: Box::new(lhs),
                     index: Box::new(idx),
                 }
             }
@@ -289,10 +305,6 @@ impl Compiler {
                     lhs: Box::new(lhs),
                     rhs: Box::new(rhs),
                 }
-            }
-            Token::LBrack => {
-                let index = self.parse_expr();
-                todo!()
             }
             arith @ (Token::Plus | Token::Minus | Token::Star | Token::Slash) => {
                 let rhs = self._parse_expr(op_power);
@@ -417,7 +429,10 @@ impl Compiler {
     }
 
     fn make_token(&mut self, kind: Token, lo: usize) -> Spanned<Token> {
-        Spanned::new(kind, Span::new(self.filename, lo, self.cursor, self.row, self.col))
+        Spanned::new(
+            kind,
+            Span::new(self.filename, lo, self.cursor, self.row, self.col),
+        )
     }
 
     fn read_num(&mut self) -> Option<Spanned<Token>> {

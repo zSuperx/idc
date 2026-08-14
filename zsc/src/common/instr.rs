@@ -5,7 +5,7 @@ pub trait Instr {
 
     fn is_terminator(&self) -> bool;
 
-    fn uncond_jump(target: BB) -> Self;
+    fn uncond_jump(target: BBID) -> Self;
 
     fn dsts(&mut self) -> impl Iterator<Item = &mut Self::Val>;
     fn srcs(&mut self) -> impl Iterator<Item = &mut Self::Val>;

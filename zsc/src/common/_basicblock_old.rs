@@ -15,7 +15,7 @@ impl std::fmt::Display for BB {
 }
 
 #[derive(Debug, Clone)]
-pub struct BasicBlock<I> {
+pub struct BasicBlockOld<I> {
     pub name: BB,
     pub instructions: Vec<I>,
     pub succ: Vec<BB>,
@@ -23,7 +23,7 @@ pub struct BasicBlock<I> {
     pub terminator: I,
 }
 
-impl<I> BasicBlock<I> {
+impl<I> BasicBlockOld<I> {
     pub fn new(name: BB, instructions: Vec<I>, terminator: I) -> Self {
         Self {
             name,
@@ -35,7 +35,7 @@ impl<I> BasicBlock<I> {
     }
 }
 
-impl<I: Display> std::fmt::Display for BasicBlock<I> {
+impl<I: Display> std::fmt::Display for BasicBlockOld<I> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}:\n", self.name))?;
         for i in self.instructions.iter() {

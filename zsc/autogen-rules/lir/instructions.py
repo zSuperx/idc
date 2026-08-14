@@ -1,8 +1,8 @@
 from gen import *
 
 V = "Value"
-T = "ResolvedTypeId"
-S = "Symbol"
+T = "TypeId"
+BB = "BBID"
 
 
 def binop(name: str):
@@ -15,6 +15,7 @@ def binop(name: str):
     )
 
 
+# fmt: off
 INSTRUCTIONS = [
     binop("add"),
     binop("sub"),
@@ -31,24 +32,28 @@ INSTRUCTIONS = [
     binop("uge"),
     binop("ult"),
     binop("ule"),
-    InstrInfo("arg", [T, V, "usize"], defs=[], uses=[1]),
-    InstrInfo("call", [T, V], defs=[1], uses=[]),
-    InstrInfo("copy", [T, V, V], defs=[1], uses=[2]),
-    InstrInfo("alloc", [T, V, S], defs=[1], uses=[]),
-    InstrInfo("param", [T, V, S, "usize"], defs=[1], uses=[]),
-    InstrInfo("sparam", [T, V, S, "usize"], defs=[1], uses=[]),
+
+    InstrInfo("comment", ["String"], fmt="; {v0}"),
+    
+    InstrInfo("call", [V], defs=[0], uses=[]),
+
+    InstrInfo("copy", [V, V], defs=[0], uses=[1]),
     InstrInfo("load", [T, V, V], defs=[1], uses=[2]),
     InstrInfo("store", [T, V, V], defs=[], uses=[1, 2]),
-    InstrInfo("comment", ["String"], fmt="; {v0}"),
-    InstrInfo("sext", [T, V, V], uses=[2], defs=[1]),
-    InstrInfo("zext", [T, V, V], uses=[2], defs=[1]),
-    InstrInfo("trunc", [T, V, V], uses=[2], defs=[1]),
+
+    InstrInfo("alloca", [T, V], defs=[1], uses=[]),
+
+    InstrInfo("sext", [T, V, V], defs=[1], uses=[2]),
+    InstrInfo("zext", [T, V, V], defs=[1], uses=[2]),
+    InstrInfo("trunc", [T, V, V], defs=[1], uses=[2]),
+
     # terminators
-    InstrInfo("retv", is_terminator=True),
+    InstrInfo("retv", defs=[], uses=[], is_terminator=True, fmt="ret"),
     InstrInfo("ret", [T, V], defs=[], uses=[1], is_terminator=True),
-    InstrInfo("br", [T, V, "BB", "BB"], defs=[], uses=[1], is_terminator=True),
-    jmp := InstrInfo("jmp", ["BB"], is_terminator=True),
+    InstrInfo("br", [V, BB, BB], defs=[], uses=[0], is_terminator=True),
+    jmp := InstrInfo("jmp", [BB], is_terminator=True),
 ]
+# fmt: on
 
 # LirInstr:
 # load ty, dst, (base + offset * scale + imm)

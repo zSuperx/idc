@@ -25,7 +25,7 @@ impl Compiler {
         builder
     }
 
-    fn const_fold_bb(&mut self, bb: &mut BasicBlock<LirInstr>, map: &mut HashMap<Value, i128>) {
+    fn const_fold_bb(&mut self, bb: &mut BasicBlockOld<LirInstr>, map: &mut HashMap<Value, i128>) {
         for i in 0..bb.instructions.len() {
             match &bb.instructions[i] {
                 Copy(_, dst, rs1) => {
@@ -90,7 +90,7 @@ impl Compiler {
     }
 
     /// This pass should simply mark which registers are read from
-    fn track_live_code(&mut self, bb: &mut BasicBlock<LirInstr>, is_read: &mut HashSet<Value>) {
+    fn track_live_code(&mut self, bb: &mut BasicBlockOld<LirInstr>, is_read: &mut HashSet<Value>) {
         for instr in bb.instructions.iter_mut() {
             for src in instr.srcs() {
                 is_read.insert(*src);
@@ -100,7 +100,7 @@ impl Compiler {
 
     // This pass should look at all instructions who PRODUCE a value. If that value is read, it is
     // considered a useful instructions, otherwise it's dead code
-    fn dead_code_elim(&mut self, bb: &mut BasicBlock<LirInstr>, is_read: &HashSet<Value>) {
+    fn dead_code_elim(&mut self, bb: &mut BasicBlockOld<LirInstr>, is_read: &HashSet<Value>) {
         let old = std::mem::take(&mut bb.instructions);
         for mut instr in old {
             let mut keep = false;

@@ -1,5 +1,6 @@
 use std::hash::Hash;
 
+use crate::die;
 use registry::*;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
@@ -22,10 +23,7 @@ pub enum Type {
 
     // Rest
     Base(&'static str),
-    Function {
-        args: Vec<TypeId>,
-        returns: TypeId,
-    },
+    Function { args: Vec<TypeId>, returns: TypeId },
     Pointer(TypeId),
 }
 
@@ -54,8 +52,7 @@ impl Type {
             | Type::U32
             | Type::I64
             | Type::U64
-            | Type::Bool
-            | Type::Void => true,
+            | Type::Bool => true,
             _ => false,
         }
     }
@@ -67,27 +64,45 @@ impl Type {
         }
     }
 
+    pub fn is_pointer(&self) -> bool {
+        match self {
+            Type::Pointer(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn get_pointee(&self) -> TypeId {
+        match self {
+            Type::Pointer(p) => *p,
+            _ => die!("Not a pointer type: {self}"),
+        }
+    }
+
     pub fn alignment(&self) -> usize {
         match self {
             Type::Base(_) => todo!(),
             // Function types are coerced to pointers
-            x => x.size(),
+            x => x.bits(),
         }
     }
 
-    pub fn size(&self) -> usize {
+    pub fn bits(&self) -> usize {
         match self {
-            Type::I8 | Type::U8 => 1,
-            Type::I16 | Type::U16 => 2,
-            Type::I32 | Type::U32 => 4,
-            Type::I64 | Type::U64 => 8,
+            Type::I8 | Type::U8 => 8,
+            Type::I16 | Type::U16 => 16,
+            Type::I32 | Type::U32 => 32,
+            Type::I64 | Type::U64 => 64,
             Type::Bool => 1,
             Type::Void => 0,
+            Type::Function { .. } => 64,
+            Type::Pointer(_) => 64,
             Type::Base(_) => todo!(),
-            Type::Function { args, returns } => 8,
-            Type::Pointer(_) => 8,
             Self::Unresolved(..) => panic!(),
         }
+    }
+
+    pub fn bytes(&self) -> usize {
+        (self.bits() + 7) / 8
     }
 }
 

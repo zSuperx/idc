@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{arch::lir::*, common::*};
+use crate::{IRs::lir::*, common::*};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -19,7 +19,13 @@ pub struct Compiler {
     // Parser shit
     pub last_span: Span,
 
-    pub func: FnCtx,
+    pub current_function: Option<Symbol>,
+
+    /// Each entry is COND BLOCK, END BLOCK
+    pub loop_labels: Vec<(BBID, BBID)>,
+    pub loop_depth: usize,
+
+    pub functions: HashMap<Symbol, HashMap<Symbol, SymbolInfo>>,
     pub env: Env<&'static str, Symbol>, // Tracks scopes and string -> symbol mappings
     pub global_symbols: HashMap<Symbol, SymbolInfo>,
 
@@ -55,10 +61,6 @@ impl Compiler {
         self.types.borrow_mut().add(ty)
     }
 
-    pub fn current_function(&self) -> Symbol {
-        self.func.symbol.unwrap()
-    }
-
     pub fn next_sym(&mut self, argname: &str) -> Symbol {
         let id = self.symbol_counter;
         self.symbol_counter += 1;
@@ -81,10 +83,15 @@ impl Compiler {
             ty,
             kind,
             address_taken: false,
-            value: Value::uninit(),
+            value: None,
         };
         self.global_symbols.insert(sym, info);
         spanned_sym
+    }
+
+    pub fn get_current_function_info(&self) -> &SymbolInfo {
+        let sym = self.current_function.unwrap();
+        self.lookup_symbol(sym)
     }
 
     pub fn add_local_symbol(
@@ -92,9 +99,8 @@ impl Compiler {
         name: Spanned<&'static str>,
         ty: TypeId,
         kind: SymbolKind,
-    ) -> Spanned<Symbol> {
+    ) -> Symbol {
         let sym = self.next_sym(name.inner);
-        let spanned_sym = Spanned::new(sym, name.span);
         let None = self.env.insert(name.inner, sym) else {
             die!("Duplicate definition of {name}");
         };
@@ -103,30 +109,40 @@ impl Compiler {
             ty,
             kind,
             address_taken: false,
-            value: Value::uninit(),
+            value: None,
         };
-        self.func.local_symbols.insert(sym, info);
-        spanned_sym
+        let local_symbols = self
+            .functions
+            .get_mut(&self.current_function.unwrap())
+            .unwrap();
+        local_symbols.insert(sym, info);
+        sym
+    }
+
+    pub fn get_local_symbols_mut(&mut self) -> &mut HashMap<Symbol, SymbolInfo> {
+        self.functions.get_mut(&self.current_function.unwrap()).unwrap()
     }
 
     pub fn lookup_symbol(&self, symbol: Symbol) -> &SymbolInfo {
-        self.func
-            .local_symbols
+        let local_symbols = self.functions.get(&self.current_function.unwrap()).unwrap();
+        local_symbols
             .get(&symbol)
             .or(self.global_symbols.get(&symbol))
             .unwrap_or_else(|| die!("Symbol {symbol} does not exist"))
     }
 
     pub fn lookup_symbol_mut(&mut self, symbol: Symbol) -> &mut SymbolInfo {
-        self.func
-            .local_symbols
+        let local_symbols = self
+            .functions
+            .get_mut(&self.current_function.unwrap())
+            .unwrap();
+        local_symbols
             .get_mut(&symbol)
             .or(self.global_symbols.get_mut(&symbol))
             .unwrap_or_else(|| die!("Symbol {symbol} does not exist"))
     }
 
-    pub fn compile_prog(&mut self) -> Vec<Builder<LirInstr>> {
-        let mut buf = vec![];
+    pub fn compile_prog(&mut self) {
         let mut parsed_objects = vec![];
         while !self.is_next(Token::Eof) {
             let o = self.parse_obj();
@@ -135,54 +151,56 @@ impl Compiler {
 
         self.collect_all(&parsed_objects);
 
-        let mut checked_objects: Vec<_> = parsed_objects
+        let checked_objects: Vec<_> = parsed_objects
             .into_iter()
             .map(|o| self.check_obj(o))
             .collect();
 
-        // Debug printing
-        for (k, v) in self
-            .global_symbols
-            .iter()
-            .chain(self.func.local_symbols.iter())
-        {
-            let SymbolInfo {
-                raw_name,
-                ty,
-                kind,
-                address_taken,
-                ..
-            } = v;
-            println!("Symbol {k}");
-            println!("Type: {ty}");
-            println!("Raw name: {raw_name}\n\n");
+        let mut builder = IRBuilder::default();
+
+        for obj in checked_objects {
+            self.lower_func(&mut builder, &obj);
+            let f = builder.get_current_function();
+            builder.print_function(f);
         }
+
+        // Debug printing
+        // for (k, v) in self
+        //     .global_symbols
+        //     .iter()
+        //     .chain(self.func.local_symbols.iter())
+        // {
+        //     let SymbolInfo {
+        //         raw_name,
+        //         ty,
+        //         kind,
+        //         address_taken,
+        //         value,
+        //         ..
+        //     } = v;
+        //     println!("Symbol {k}");
+        //     println!("Type: {ty}");
+        //     println!("Value: {value}");
+        //     println!("Raw name: {raw_name}\n");
+        // }
         die!("End");
-        buf
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SymbolKind {
     Local,
-    Param(usize),
+    Arg(usize),
     Global,
     Function,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SymbolInfo {
     pub raw_name: Spanned<&'static str>,
     pub ty: TypeId,
     pub kind: SymbolKind,
     pub address_taken: bool,
-    pub value: Value,
+    pub value: Option<Value>,
 }
 
-#[derive(Debug, Default)]
-pub struct FnCtx {
-    pub raw_name: Spanned<&'static str>,
-    pub symbol: Option<Symbol>,
-    pub local_symbols: HashMap<Symbol, SymbolInfo>,
-    pub var2val: HashMap<Symbol, Value>,
-}

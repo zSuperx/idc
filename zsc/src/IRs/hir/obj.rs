@@ -10,8 +10,9 @@ pub enum HirObj {
         body: Box<Spanned<HirStmt>>,
     },
     Global {
-        lhs: Spanned<&'static str>,
-        rhs: Box<HirExpr>,
+        name: Spanned<&'static str>,
+        ty: Spanned<TypeId>,
+        rhs: Box<Spanned<HirExpr>>,
     },
     Struct {
         name: Spanned<&'static str>,

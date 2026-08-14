@@ -23,7 +23,7 @@ pub enum HirExpr {
         rhs: Box<Spanned<HirExpr>>,
     },
     Index {
-        expr: Box<Spanned<HirExpr>>,
+        base: Box<Spanned<HirExpr>>,
         index: Box<Spanned<HirExpr>>,
     },
     Un {

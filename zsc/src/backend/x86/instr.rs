@@ -8,7 +8,8 @@
 
 use crate::common::*;
 use crate::ast::*;
-use crate::arch::x86::*;
+use crate::backend::*;
+use crate::IRs::lir::*;
 
 #[derive(Debug, Clone)]
 pub enum x86Instr {
@@ -247,7 +248,7 @@ impl Instr for x86Instr {
         }
     }
 
-    fn uncond_jump(bb: BB) -> Self {
+    fn uncond_jump(bb: BBID) -> Self {
         Self::Jmp(bb)
     }
 }

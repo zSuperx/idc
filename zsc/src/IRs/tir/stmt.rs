@@ -6,22 +6,22 @@ use super::*;
 #[derive(Debug, Clone)]
 pub enum TirStmt {
     Let {
-        lhs: Spanned<Symbol>,
-        ty: Option<Spanned<TypeId>>,
-        rhs: Spanned<TirExpr>,
+        lhs: Symbol,
+        ty: Option<TypeId>,
+        rhs: TirExpr,
     },
     While {
-        cond: Spanned<TirExpr>,
-        body: Box<Spanned<TirStmt>>,
+        cond: TirExpr,
+        body: Box<TirStmt>,
     },
     Continue,
     Break,
     If {
-        cond: Spanned<TirExpr>,
-        then_: Box<Spanned<TirStmt>>,
-        else_: Box<Spanned<TirStmt>>,
+        cond: TirExpr,
+        then_: Box<TirStmt>,
+        else_: Box<TirStmt>,
     },
-    Return(Spanned<TirExpr>),
-    Block(Vec<Spanned<TirStmt>>),
-    Expr(Spanned<TirExpr>),
+    Return(Option<TirExpr>),
+    Block(Vec<TirStmt>),
+    Expr(TirExpr),
 }
