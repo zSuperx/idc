@@ -35,11 +35,15 @@ impl<I: Instr> IRBuilder<I> {
         }
     }
 
+    /// Yields a clone of `other` but without any instructions or terminators. All other state is
+    /// carried over, including counters and BB successors/predecessors
     pub fn with_state<O: Instr>(other: &IRBuilder<O>) -> Self {
-        let mut s = Self::empty();
-        s.cursor = other.cursor;
-        s.reg_count = other.reg_count;
-        s.block_count = other.block_count;
+        let mut s = Self {
+            cursor: other.cursor,
+            reg_count: other.reg_count,
+            block_count: other.block_count,
+            functions: Default::default(),
+        };
         for (name, function) in other.get_all_functions() {
             let mut empty_function = IRFunction {
                 entrypoint: function.entrypoint,
@@ -112,6 +116,15 @@ impl<I: Instr> IRBuilder<I> {
         function.blocks.insert(id, BasicBlock::empty());
 
         return id;
+    }
+
+    /// Replaces a function's entrypoint, returning the old one
+    pub fn set_entrypoint(&mut self, function_name: &'static str, new_entrypoint: BBID) -> BBID {
+        let function = self.functions.get_mut(function_name).unwrap();
+
+        let ret = function.entrypoint;
+        function.entrypoint = new_entrypoint;
+        return ret;
     }
 
     #[inline]

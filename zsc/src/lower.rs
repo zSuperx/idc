@@ -24,13 +24,13 @@ impl Compiler {
                 for (sym, info) in self.get_local_symbols_mut() {
                     let val = match info.kind {
                         SymbolKind::Local => {
-                            let dst = Value::reg(builder.next_reg());
+                            let dst = Value::mem(builder.next_reg());
                             builder.emit(Alloca(info.ty, dst));
                             dst
                         }
                         SymbolKind::Arg(i) => {
                             if info.address_taken {
-                                let dst = Value::reg(builder.next_reg());
+                                let dst = Value::mem(builder.next_reg());
                                 builder.emit(Alloca(info.ty, dst));
                                 dst
                             } else {
@@ -319,7 +319,11 @@ impl Compiler {
             }
             TirExprKind::Cast { target_ty, expr } => {
                 let rhs_val = self.lower_expr(builder, expr);
-                let dst = Value::reg(builder.next_reg());
+                let dst = if target_ty.is_pointer() {
+                    Value::mem(builder.next_reg())
+                } else {
+                    Value::reg(builder.next_reg())
+                };
                 if target_ty.bits() < expr.ty.bits() {
                     builder.emit(Trunc(*target_ty, dst, rhs_val))
                 } else if target_ty.bits() > expr.ty.bits() {

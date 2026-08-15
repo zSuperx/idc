@@ -1,5 +1,5 @@
-fn test_ite() -> i32 {
-  if true {
+fn test_ite(x: i32) -> i32 {
+  if x > 1 {
     return 69;
   } else {
     return 420;
