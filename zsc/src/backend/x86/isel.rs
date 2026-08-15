@@ -12,6 +12,7 @@ use x86Instr::*;
 pub struct x86Backend {
     map: HashMap<Value, x86Val>,
     v_rsp: i128,
+    // flags: Option<x86Flags>,
 }
 
 impl x86Backend {

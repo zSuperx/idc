@@ -25,6 +25,8 @@ pub struct Compiler {
 
     /// Each entry is COND BLOCK, END BLOCK
     pub loop_labels: Vec<(BBID, BBID)>,
+    /// Loop depth tracks how many loops deep we are: +1 when entering, -1 when leaving
+    /// Allows us to determine if `break` or `continue` were called from outside a loop
     pub loop_depth: usize,
 
     pub functions: HashMap<Symbol, HashMap<Symbol, SymbolInfo>>,

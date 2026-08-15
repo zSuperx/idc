@@ -8,3 +8,6 @@ pub use val::*;
 
 mod instr;
 pub use instr::*;
+
+mod flags;
+use flags::*;

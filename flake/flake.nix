@@ -10,7 +10,6 @@
         packages = with pkgs; [
           nasm
           mold
-          just
         ];
       };
     };
