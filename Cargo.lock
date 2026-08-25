@@ -369,6 +369,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "stang"
+version = "0.1.0"
+dependencies = [
+ "bitset",
+ "clap",
+ "derived-deref",
+ "heuristic-graph-coloring",
+ "registry",
+ "stir",
+ "tempfile",
+]
+
+[[package]]
+name = "stir"
+version = "0.1.0"
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -582,15 +599,3 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
-
-[[package]]
-name = "zsc"
-version = "0.1.0"
-dependencies = [
- "bitset",
- "clap",
- "derived-deref",
- "heuristic-graph-coloring",
- "registry",
- "tempfile",
-]

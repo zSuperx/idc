@@ -1,0 +1,144 @@
+use std::hash::Hash;
+
+use crate::die;
+use registry::*;
+use stir::isa::IRType;
+
+#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+pub enum Type {
+    Unresolved(&'static str),
+
+    // Primitive types
+    I8,
+    I16,
+    I32,
+    I64,
+
+    U8,
+    U16,
+    U32,
+    U64,
+
+    Bool,
+    Void,
+
+    // Rest
+    Base(&'static str),
+    Function { args: Vec<TypeId>, returns: TypeId },
+    Pointer(TypeId),
+}
+
+impl Type {
+    pub fn is_integral(&self) -> bool {
+        match self {
+            Type::I8
+            | Type::U8
+            | Type::I16
+            | Type::U16
+            | Type::I32
+            | Type::U32
+            | Type::I64
+            | Type::U64 => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_primitive(&self) -> bool {
+        match self {
+            Type::I8
+            | Type::U8
+            | Type::I16
+            | Type::U16
+            | Type::I32
+            | Type::U32
+            | Type::I64
+            | Type::U64
+            | Type::Bool => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_signed(&self) -> bool {
+        match self {
+            Type::I8 | Type::I16 | Type::I32 | Type::I64 => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_pointer(&self) -> bool {
+        match self {
+            Type::Pointer(..) => true,
+            _ => false,
+        }
+    }
+
+    pub fn get_pointee(&self) -> TypeId {
+        match self {
+            Type::Pointer(p) => *p,
+            _ => die!("Not a pointer type: {self}"),
+        }
+    }
+
+    pub fn alignment(&self) -> usize {
+        match self {
+            Type::Base(_) => todo!(),
+            // Function types are coerced to pointers
+            x => x.bits(),
+        }
+    }
+
+    pub fn bits(&self) -> usize {
+        match self {
+            Type::I8 | Type::U8 => 8,
+            Type::I16 | Type::U16 => 16,
+            Type::I32 | Type::U32 => 32,
+            Type::I64 | Type::U64 => 64,
+            Type::Bool => 1,
+            Type::Void => 0,
+            Type::Function { .. } => 64,
+            Type::Pointer(_) => 64,
+            Type::Base(_) => todo!(),
+            Self::Unresolved(..) => panic!(),
+        }
+    }
+
+    pub fn bytes(&self) -> usize {
+        (self.bits() + 7) / 8
+    }
+
+    pub fn toIRType(&self) -> IRType {
+        match self {
+            Type::I8 | Type::U8 => IRType::I8,
+            Type::I16 | Type::U16 => IRType::I16,
+            Type::I32 | Type::U32 => IRType::I32,
+            Type::I64 | Type::U64 => IRType::I64,
+            Type::Bool => IRType::I8,
+            Type::Pointer(id) => IRType::Ptr,
+            Type::Base(..) | Type::Function { .. } => todo!(),
+            _ => panic!("Can't lower {self:?} type"),
+        }
+    }
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Type::Base(s) => format_args!("{}", *s),
+            Type::Function { args, returns } => {
+                format_args!(
+                    "Fn({}) -> {}",
+                    args.iter()
+                        .map(|s| s.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    *returns
+                )
+            }
+            Type::Pointer(type_id) => format_args!("*{}", *type_id),
+            x => format_args!("{}", format!("{x:?}").to_lowercase()),
+        };
+        f.write_fmt(s)
+    }
+}
+
+pub type TypeId = Id<Type>;

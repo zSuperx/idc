@@ -1,0 +1,63 @@
+#[derive(Clone, Debug, Copy)]
+pub enum Reg {
+    A,
+    B,
+    C,
+    D,
+    SI,
+    DI,
+    SP,
+    BP,
+    R8,
+    R9,
+    R10,
+    R11,
+    R12,
+    R13,
+    R14,
+    R15,
+    Virt(usize),
+}
+
+impl Reg {
+    pub fn sized_print(&self, f: &mut std::fmt::Formatter<'_>, size: usize) -> std::fmt::Result {
+        let names = match self {
+            Reg::A => ["al", "ax", "eax", "rax"],
+            Reg::B => ["bl", "bx", "ebx", "rbx"],
+            Reg::C => ["cl", "cx", "ecx", "rcx"],
+            Reg::D => ["dl", "dx", "edx", "rdx"],
+            Reg::SI => ["sil", "si", "esi", "rsi"],
+            Reg::DI => ["dil", "di", "edi", "rdi"],
+            Reg::SP => ["spl", "sp", "esp", "rsp"],
+            Reg::BP => ["bpl", "bp", "ebp", "rbp"],
+            Reg::R8 => ["r8b", "r8w", "r8d", "r8"],
+            Reg::R9 => ["r9b", "r9w", "r9d", "r9"],
+            Reg::R10 => ["r10b", "r10w", "r10d", "r10"],
+            Reg::R11 => ["r11b", "r11w", "r11d", "r11"],
+            Reg::R12 => ["r12b", "r12w", "r12d", "r12"],
+            Reg::R13 => ["r13b", "r13w", "r13d", "r13"],
+            Reg::R14 => ["r14b", "r14w", "r14d", "r14"],
+            Reg::R15 => ["r15b", "r15w", "r15d", "r15"],
+            Reg::Virt(v) => {
+                let width_spec = match size {
+                    8 => "b",
+                    16 => "w",
+                    32 => "d",
+                    64 => "q",
+                    _ => panic!("Size: {size} not supported"),
+                };
+                return f.write_fmt(format_args!("%{v}{width_spec}"));
+            }
+        };
+        let sized_name = match size {
+            8 => names[0],
+            16 => names[1],
+            32 => names[2],
+            64 => names[3],
+            _ => {
+                panic!("Size: {size} not supported")
+            }
+        };
+        f.write_str(sized_name)
+    }
+}
