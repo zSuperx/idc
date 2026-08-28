@@ -25,6 +25,7 @@ some point.
 
 - [ ] Create a test suite:
     - This should include a separate source file for every type of test (i.e. `test_cast.idc`)
+    - Write a script or harness to test them all.
 
 - [ ] Improve parser API:
     - Right now the parser will just `die!` if it encounters a token it didn't
@@ -34,14 +35,12 @@ some point.
       This requires me to parse either an `expr` OR a `type` once I see a
       `sizeof` token.
 
-- [ ] Change LirVal::Mem (and x86Val::Mem) to include compex addressing modes:
-      - DONT lower Expr::Index to (Deref + Add + Mul) subexpr, as a lot of
-        information ends up getting lost 
-      - Instead, change the LirVal::Mem API to include base `Reg`, offset `Option<Reg>`,
-        scale `usize` and displacement `usize`
-        - For types, scale and disp can get away with being unwrapped values
-          since the values `1` and `0` can be used to represent their absence
-      - This is in hopes of emitting a physical memory operand like `[rbx + rax * 8 + 1]`
+- [ ] Add better diagnostics. 
+    - Don't `die!()` upon facing any error
+    - Instead, try and bail out and parse/type check the next logical object
+      - This can include parse errors or sema errors
+      - If we fail to parse/sema check a statement, check the next statement (if in block)
+      - If we fail on a function, check the next function
 
 - [ ] Look into (ab)using `lea` for math!
 
@@ -53,43 +52,26 @@ some point.
       predecessors. This is a TODO for when that API gets overhauled. For now,
       it just loops forever until convergence.
 
-- [ ] Add peephole optimizations to `optimizer.rs`:
-    - These should happen at the LIR level so the backend emitter is
-      dealing with the simplest code possible
-    - Of course, peepholes should also happen on the backend MLIR, but
-      performing it on LIR should be the priority
+- [ ] Improve the IRFunction builder API
+    - First of all, define type aliases
+      - type STFunction = IRFunction<IRInstr, IRType>
+      - type x86Function = IRFunction<x86Instr, LLType>
+    - Then define custom impls on those types (i.e. print)
+    - Add function arguments to the IRFunction struct and a way to lower them for function calls
+
+- [ ] Add optimizations.
+    - This should be a lot easier to do now that I have a visitor dfs function in place on the builder API
 
 - [ ] Function calls (x86):
-    - This should be easy enough, the only hurdle is tracking `use` and `def`
-      sets in liveness analysis and register allocation
-    - Off the top of my head, `foo(n1, ..., n6)` should use (in
-      increasing order) `DI, SI, D, C, R8, R9` and def `A`
-    - Also something that might be challenging is (re)storing caller/callee
-      saved registers
-        - `call foo` should "use" all caller saved registers, so if any are
-          `LIVE` right after the `call`, they should be pushed onto the stack
-          before the `call` and popped off after
-
-- [ ] `sizeof(x)`:
-    - This should be easy, since every type has a size, and every expression
-      has a type
-    - Probably add `alignof(x)` while you're at it
-
-- [ ] Structs and custom types:
-    - This might be a doozy. I understand the frontend and field access in the
-      backend, but what about casting?
-    - Also how do you pass structs by value? It's probably via the stack
-      somewhere in the SYS V ABI
-    - After some light testing with `clang`, it seems like you just put it on
-      the stack, but IN ORDER. E.g. if the first argument is a struct, you push
-      the struct onto the stack, THEN stack arguments (if they exists) are
-      pushed after that. I believe this in turn renders `rdi` unused?
+    - This is harder than I first thought.
+    - If I choose to go via the System V ABI, I will have to implement structs
+    - Therefore I need to obey their rules. Allegedly...
+        - The first 6 "eightbyte" arguments are passed via registers
+        - This includes structs. HOWEVER, if there are e.g. 3 registers left
+          and a struct has 4 "eightbyte" fields, it gets put completely on the stack
 
 - [ ] Arrays:
-    - Depends on sizeof
-    - God knows how I'm gonna do this
-    - I plan to keep things simple via `x[i]` == `*(x + i * sizeof(*x))`
-    - But I really don't understand the frontend implementation:
+    - I really don't understand the frontend implementation:
         - In C, `char x[4096]` means `x` has type `char[4096]`, and it can
           "decay" to a `char*`
         - As of now, this makes no sense to me.
@@ -112,8 +94,7 @@ some point.
     - But this should eventually be changed into type inference, likely via the
       Unification Algorithm
 
-- [ ] Improve graph coloring API:
-    - It sucks!
+- [ ] Add a graph coloring component for regalloc
 
 - [ ] Allocate spills:
     - When the graph coloring algorithm "runs out of colors" to assign (as in
@@ -123,14 +104,20 @@ some point.
 
 ### Finished
 
-- [x] Fix register precoloring:
-    - The current model just makes a clique between all physical registers and
-      hands that to the graph coloring algorithm. Then it just ignores the
-      colors assigned to the physical registers and uses the numbers `0 - 15`
-      instead. This is WRONG.
-    - True precoloring requires integration with the graph coloring algorithm
-      itself, meaning I either need to find a better crate to do it for me, or
-      fork it and do it myself (likely).
+- [x] `sizeof(x)`:
+    - This should be easy, since every type has a size, and every expression
+      has a type
+    - Probably add `alignof(x)` while you're at it
+
+
+- [x] Change LirVal::Mem (and x86Val::Mem) to include compex addressing modes:
+      - DONT lower Expr::Index to (Deref + Add + Mul) subexpr, as a lot of
+        information ends up getting lost 
+      - Instead, change the LirVal::Mem API to include base `Reg`, offset `Option<Reg>`,
+        scale `usize` and displacement `usize`
+        - For types, scale and disp can get away with being unwrapped values
+          since the values `1` and `0` can be used to represent their absence
+      - This is in hopes of emitting a physical memory operand like `[rbx + rax * 8 + 1]`
 
 - [x] Type casting:
     - Possible syntax:
@@ -156,6 +143,8 @@ some point.
         1. Same sized types (this means all pointers can be cast to and from
            each other)
         2. Any primitive with any other primitive
+
+### Dropped/Deprecated
 
 
 _(Note: This list was created on 06/22/2026, so it may not have all goals)_
