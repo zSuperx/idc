@@ -10,7 +10,7 @@ require "$Bin/utils/printers.pl";
 my $TY = "IRType";
 my $VAL = "IRValue";
 my $INSTR = "IRInstr";
-my $BB = "BBID";
+my $BB = "IRBB";
 
 # templates
 my $binOp = {
@@ -112,7 +112,8 @@ my $isa = {
   value => $VAL,
 
   extraCode => [
-    "use crate::isa::*;",
+    "use crate::targets::stir::isa::*;",
+    "use crate::targets::stir::builder::*;",
   ],
 
   specFile => __FILE__,

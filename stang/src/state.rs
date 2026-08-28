@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use registry::Registry;
-use stir::builder::BBID;
+use stir::builder::IRBB;
 use stir::isa::IRValue;
 
 use crate::ast::*;
@@ -90,7 +90,7 @@ pub struct Function {
     /// Used by the codegen phase.
     /// Each entry is COND_BB, END_BB
     /// That is, `continue` jumps to COND_BB, and `break` jumps to END_BB
-    pub loop_labels: Vec<(BBID, BBID)>,
+    pub loop_labels: Vec<(IRBB, IRBB)>,
 
     /// Loop depth tracks how many loops deep we are: +1 when entering, -1 when leaving
     /// Allows us to determine if `break` or `continue` were called from outside a loop

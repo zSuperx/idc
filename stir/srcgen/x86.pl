@@ -9,7 +9,7 @@ require "$Bin/utils/printers.pl";
 # Meta-constants: Rust types used in ISA definition
 my $VAL = "x86Value";
 my $INSTR = "x86Instr";
-my $BB = "BBID";
+my $BB = "x86BB";
 
 # templates
 my $accumOp = {
@@ -38,10 +38,6 @@ my $isa = {
   isaName => "x86",
   instrName => $INSTR,
   value => $VAL,
-  specFile => __FILE__,
-  extraCode => [
-    "use crate::backends::x86::val::*;"
-  ],
 
   instructions => {
     comment => {
@@ -106,6 +102,12 @@ my $isa = {
       uses => [ "rs1" ],
     }
   },
+
+  extraCode => [
+    "use crate::targets::x86::isa::*;",
+    "use crate::targets::x86::builder::*;",
+  ],
+  specFile => __FILE__,
 };
 
 printAll($isa);

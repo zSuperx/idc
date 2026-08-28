@@ -4,11 +4,12 @@ use crate::die;
 use crate::state::{Function, SymbolKind, add_type};
 
 use IRInstr::*;
-use stir::isa::{CmpOp, IRInstr, IRType, IRValue};
-use stir::{builder::*, comment};
+use stir::builder::*;
+use stir::isa::*;
+use stir::comment;
 
 impl Function {
-    pub fn codegen_func(&mut self) -> IRFunction<IRInstr, IRType> {
+    pub fn codegen_func(&mut self) -> IRFunction {
         let irrty = match self.return_type.lookup() {
             Type::Void => IRType::I32,
             x => x.toIRType(),
@@ -53,7 +54,7 @@ impl Function {
         builder
     }
 
-    fn codegen_stmt(&mut self, builder: &mut IRFunction<IRInstr, IRType>, stmt: &TirStmt) {
+    fn codegen_stmt(&mut self, builder: &mut IRFunction, stmt: &TirStmt) {
         match stmt {
             TirStmt::Let { lhs, ty, rhs } => {
                 let rhs_val = self.codegen_expr(builder, rhs);
@@ -157,7 +158,7 @@ impl Function {
 
     fn codegen_expr(
         &mut self,
-        builder: &mut IRFunction<IRInstr, IRType>,
+        builder: &mut IRFunction,
         expr: &TirExpr,
     ) -> IRValue {
         match &expr.kind {

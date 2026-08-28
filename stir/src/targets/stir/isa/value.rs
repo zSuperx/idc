@@ -1,4 +1,4 @@
-use crate::isa::IRType;
+use super::IRType;
 
 pub type VReg = usize;
 

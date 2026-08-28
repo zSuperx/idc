@@ -3,15 +3,10 @@ use std::collections::HashMap;
 ///
 /// Lowers from STIR to x86 MIR
 ///
-use super::asm::instr::*;
-
-use super::reg::*;
-use super::types::*;
-use super::val::*;
-
-use crate::builder::*;
 use crate::comment;
-use crate::isa::*;
+use crate::common::builder::*;
+use crate::targets::stir::isa::*;
+use crate::targets::x86::isa::*;
 use x86Instr::*;
 
 #[derive(Default)]
@@ -37,7 +32,7 @@ impl Backend {
 
     fn createFrameSlot(
         &mut self,
-        builder: &mut IRFunction<x86Instr, LLType>,
+        builder: &mut FunctionBuilder<x86Instr, LLType>,
         value: &IRValue,
         ty: &IRType,
     ) -> x86Value {
@@ -51,7 +46,7 @@ impl Backend {
 
     fn lowerToReg(
         &self,
-        builder: &mut IRFunction<x86Instr, LLType>,
+        builder: &mut FunctionBuilder<x86Instr, LLType>,
         value: &IRValue,
         ty: LLType,
     ) -> x86Value {
@@ -92,11 +87,11 @@ impl Backend {
 
     pub fn lower(
         &mut self,
-        stir_function: &IRFunction<IRInstr, IRType>,
-    ) -> IRFunction<x86Instr, LLType> {
+        stir_function: &FunctionBuilder<IRInstr, IRType>,
+    ) -> FunctionBuilder<x86Instr, LLType> {
         // Create the function
         let rty = lowerIRType(stir_function.getReturnType());
-        let mut new_function = IRFunction::new(stir_function.name(), rty);
+        let mut new_function = FunctionBuilder::new(stir_function.name(), rty);
         let builder = &mut new_function;
         builder.setRegCount(stir_function.getRegCount());
 

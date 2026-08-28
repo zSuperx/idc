@@ -1,19 +1,18 @@
 use std::collections::{HashMap, HashSet};
+use std::marker::PhantomData;
 
-use crate::traits::InstructionTrait;
-
-#[derive(Debug, Clone, Copy, Default, Hash, Eq, PartialEq)]
-pub struct BBID(&'static str, &'static str, usize);
+use super::basicblock::{BBID, BasicBlock};
+use super::traits::InstructionTrait;
 
 #[derive(Debug, Clone)]
-pub struct IRFunction<I: InstructionTrait, T> {
-    cursor: BBID,
-    name: &'static str,
-    return_type: T,
-    entrypoint: BBID,
-    reg_count: usize,
-    block_count: usize,
-    blocks: HashMap<BBID, BasicBlock<I>>,
+pub struct FunctionBuilder<I: InstructionTrait, T> {
+    pub(crate) cursor: BBID<I>,
+    pub(crate) name: &'static str,
+    pub(crate) return_type: T,
+    pub(crate) entrypoint: BBID<I>,
+    pub(crate) reg_count: usize,
+    pub(crate) block_count: usize,
+    pub(crate) blocks: HashMap<BBID<I>, BasicBlock<I>>,
 }
 
 #[macro_export]
@@ -27,59 +26,14 @@ macro_rules! comment {
     }
 }
 
-impl std::fmt::Display for BBID {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let BBID(function, name, index) = self;
-        if name.is_empty() {
-            f.write_fmt(format_args!(".{function}.{index}"))
-        } else {
-            f.write_fmt(format_args!(".{name}.{index}"))
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct BasicBlock<I: InstructionTrait> {
-    pub name: &'static str,
-    pub successors: HashSet<BBID>,
-    pub predecessors: HashSet<BBID>,
-    pub fallthrough: Option<BBID>,
-    pub instructions: Vec<I>,
-    pub terminator: Option<I>,
-}
-
-impl<I: InstructionTrait> BasicBlock<I> {
-    pub fn new(name: &'static str) -> Self {
-        Self {
-            name,
-            successors: Default::default(),
-            predecessors: Default::default(),
-            fallthrough: Default::default(),
-            instructions: Default::default(),
-            terminator: Default::default(),
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            name: Default::default(),
-            successors: Default::default(),
-            predecessors: Default::default(),
-            fallthrough: Default::default(),
-            instructions: Default::default(),
-            terminator: Default::default(),
-        }
-    }
-}
-
-impl<I: InstructionTrait, T> IRFunction<I, T> {
+impl<I: InstructionTrait, T> FunctionBuilder<I, T> {
     /// Creates a new IR Function builder. The function is initialized with an empty BasicBlock as
     /// its entrypoint.
     ///
     /// The insert point is set to this entrypoint, so you can start emitting immediately after
     /// creating it.
     pub fn new(name: &'static str, return_type: T) -> Self {
-        let cursor = BBID(name, "entrypoint", 0);
+        let cursor = BBID(name, "entrypoint", 0, PhantomData::default());
         let blocks = HashMap::from([(cursor, BasicBlock::empty())]);
         let block_count = 1;
         let reg_count = 0;
@@ -117,7 +71,7 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
     /// mimic `visitor`'s return value
     pub fn dfs<F>(&self, mut visitor: F) -> bool
     where
-        F: FnMut(BBID, &BasicBlock<I>) -> bool,
+        F: FnMut(BBID<I>, &BasicBlock<I>) -> bool,
     {
         let mut seen = HashSet::new();
         let mut stack = vec![self.entrypoint];
@@ -153,7 +107,7 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
     /// mimic `visitor`'s return value
     pub fn dfs_mut<F>(&mut self, mut visitor: F) -> bool
     where
-        F: FnMut(BBID, &mut BasicBlock<I>) -> bool,
+        F: FnMut(BBID<I>, &mut BasicBlock<I>) -> bool,
     {
         let mut seen = HashSet::new();
         let mut stack = vec![self.entrypoint];
@@ -192,27 +146,11 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
         })
     }
 
-    pub fn print(&self) {
-        println!("{}:", self.name);
-        self.dfs(|id, block| {
-            println!("{id}:");
-            for i in block.instructions.iter() {
-                println!("\t{i}");
-            }
-            if let Some(term) = &block.terminator {
-                println!("\t{term}");
-            } else {
-                println!("\t; !! (missing terminator)");
-            }
-            false
-        });
-    }
-
-    pub fn setInsertPoint(&mut self, block: BBID) {
+    pub fn setInsertPoint(&mut self, block: BBID<I>) {
         self.cursor = block;
     }
 
-    pub fn getInsertPoint(&mut self) -> BBID {
+    pub fn getInsertPoint(&mut self) -> BBID<I> {
         self.cursor
     }
 
@@ -220,48 +158,48 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
         &self.return_type
     }
 
-    pub fn newBlock(&mut self) -> BBID {
-        let id = BBID(self.name, "", self.block_count);
+    pub fn newBlock(&mut self) -> BBID<I> {
+        let id = BBID(self.name, "", self.block_count, Default::default());
         self.block_count += 1;
         self.blocks.insert(id, BasicBlock::empty());
         id
     }
 
-    pub fn newNamedBlock(&mut self, block_name: &'static str) -> BBID {
-        let id = BBID(self.name, block_name, self.block_count);
+    pub fn newNamedBlock(&mut self, block_name: &'static str) -> BBID<I> {
+        let id = BBID(self.name, block_name, self.block_count, Default::default());
         self.block_count += 1;
         self.blocks.insert(id, BasicBlock::new(block_name));
         id
     }
 
     /// Retrieves the entrypoint of the function
-    pub fn getEntryPoint(&self) -> BBID {
+    pub fn getEntryPoint(&self) -> BBID<I> {
         self.entrypoint
     }
 
     /// Replaces a function's entrypoint, returning the old one
-    pub fn setEntryPoint(&mut self, new_entrypoint: BBID) -> BBID {
+    pub fn setEntryPoint(&mut self, new_entrypoint: BBID<I>) -> BBID<I> {
         let ret = self.entrypoint;
         self.entrypoint = new_entrypoint;
         ret
     }
 
     #[inline]
-    pub fn removeFallthrough(&mut self) -> Option<BBID> {
+    pub fn removeFallthrough(&mut self) -> Option<BBID<I>> {
         self.removeFallthroughFrom(self.cursor)
     }
 
-    pub fn removeFallthroughFrom(&mut self, this: BBID) -> Option<BBID> {
+    pub fn removeFallthroughFrom(&mut self, this: BBID<I>) -> Option<BBID<I>> {
         let this_block = self.blocks.get_mut(&this).unwrap();
         this_block.fallthrough.take()
     }
 
     #[inline]
-    pub fn addFallthrough(&mut self, fallthrough: BBID) {
+    pub fn addFallthrough(&mut self, fallthrough: BBID<I>) {
         self.addFallthroughTo(self.cursor, fallthrough);
     }
 
-    pub fn addFallthroughTo(&mut self, this: BBID, fallthrough: BBID) {
+    pub fn addFallthroughTo(&mut self, this: BBID<I>, fallthrough: BBID<I>) {
         let this_block = self.blocks.get_mut(&this).unwrap();
         this_block.fallthrough = Some(fallthrough);
         this_block.successors.insert(fallthrough);
@@ -271,11 +209,11 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
     }
 
     #[inline]
-    pub fn addSuccessors(&mut self, successors: &[BBID]) {
+    pub fn addSuccessors(&mut self, successors: &[BBID<I>]) {
         self.addSuccessorsTo(self.cursor, successors);
     }
 
-    pub fn addSuccessorsTo(&mut self, this: BBID, successors: &[BBID]) {
+    pub fn addSuccessorsTo(&mut self, this: BBID<I>, successors: &[BBID<I>]) {
         for succ_id in successors {
             let this_block = self.blocks.get_mut(&this).unwrap();
             this_block.successors.insert(*succ_id);
@@ -286,11 +224,11 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
     }
 
     #[inline]
-    pub fn addPredecessors(&mut self, successors: &[BBID]) {
+    pub fn addPredecessors(&mut self, successors: &[BBID<I>]) {
         self.addPredecessorsTo(self.cursor, successors);
     }
 
-    pub fn addPredecessorsTo(&mut self, this: BBID, predecessors: &[BBID]) {
+    pub fn addPredecessorsTo(&mut self, this: BBID<I>, predecessors: &[BBID<I>]) {
         for pred_id in predecessors {
             assert_eq!(this.0, pred_id.0);
             let this_block = self.blocks.get_mut(&this).unwrap();
@@ -317,7 +255,7 @@ impl<I: InstructionTrait, T> IRFunction<I, T> {
         self.blocks[&self.cursor].terminator.is_some()
     }
 
-    pub fn isTerminated(&self, this: BBID) -> bool {
+    pub fn isTerminated(&self, this: BBID<I>) -> bool {
         self.blocks[&this].terminator.is_some()
     }
 

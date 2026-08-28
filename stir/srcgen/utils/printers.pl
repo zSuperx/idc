@@ -201,8 +201,7 @@ sub printAll {
 
 
 // Common imports needed by all ISAs:
-use crate::traits::InstructionTrait;
-use crate::builder::BBID;
+use crate::common::traits::InstructionTrait;
 use $isa->{instrName}::*;
 
 // Extra imports:
