@@ -28,9 +28,6 @@ impl<K> Default for Registry<K> {
 }
 
 impl<K: Hash + Clone + Eq> Registry<K> {
-    /// Creates a new Registry. The returned value will be a reference to a static address on the heap.
-    /// This is done so that Id's returned by `add` can safely reference the owning store.
-
     /// Add a value to the store. This will return an `Id` that can look itself up if needed.
     ///
     /// Duplicate values will return the original `Id`. Hence, this can be used as a

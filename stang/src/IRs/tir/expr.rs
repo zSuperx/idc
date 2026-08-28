@@ -13,10 +13,7 @@ impl TirExpr {
     }
 
     pub fn is_valid_lvalue(&self) -> bool {
-        match self.kind {
-            TirExprKind::ValueOf(..) | TirExprKind::Load { .. } => true,
-            _ => false,
-        }
+        matches!(self.kind, TirExprKind::ValueOf(..) | TirExprKind::Load { .. })
     }
 }
 

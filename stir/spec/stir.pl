@@ -82,7 +82,7 @@ my $isa = {
     },
 
     icmp => {
-      args => [ "cmp:Cmp", "ty:$TY", "dst:$VAL", "lhs:$VAL", "rhs:$VAL" ],
+      args => [ "cmp:CmpOp", "ty:$TY", "dst:$VAL", "lhs:$VAL", "rhs:$VAL" ],
       uses => [ "lhs", "rhs" ],
       defs => [ "dst" ],
       fmt  => "{dst} = {name} {cmp} {ty}, {lhs}, {rhs}",

@@ -1,6 +1,6 @@
-fn main(x: i32) -> i32 {
-  if x > 1 {
-    return 6_9;
+fn main() -> i32 {
+  if true {
+    return 69;
   } else {
     return 420;
   }

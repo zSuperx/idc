@@ -94,10 +94,10 @@ impl Function {
     }
 
     fn check_stmt(&mut self, Spanned { inner: stmt, span }: Spanned<HirStmt>) -> TirStmt {
-        let kind = match stmt {
+        match stmt {
             HirStmt::Let { lhs, ty, rhs } => {
                 let ty = ty.map(|t| resolve_type(&t));
-                let checked_rhs = self.check_rvalue_expr(&rhs, ty.map(|t| t));
+                let checked_rhs = self.check_rvalue_expr(&rhs, ty);
 
                 if let Some(ty) = ty
                     && ty != checked_rhs.ty
@@ -156,9 +156,8 @@ impl Function {
                 let cond_ty = checked_cond.ty;
                 if *cond_ty != Type::Bool {
                     die!(
-                        "Type mismatch. Expected `{}` but got {}",
+                        "Type mismatch. Expected `{}` but got {cond_ty}: {span}",
                         Type::Bool,
-                        span.wrap(cond_ty)
                     )
                 }
                 let checked_then = Box::new(self.check_stmt(*then_));
@@ -197,9 +196,7 @@ impl Function {
                 let e = self.check_rvalue_expr(&e, None);
                 TirStmt::Expr(e)
             }
-        };
-
-        kind
+        }
     }
 
     // NOTE: This should probably return a pointer?
@@ -272,10 +269,8 @@ impl Function {
             HirExpr::Num(int_str) => {
                 let ty = match hint {
                     Some(hint_id) => {
-                        if hint_id.is_integral() {
+                        if hint_id.is_integral() || hint_id.is_pointer() {
                             hint_id
-                        } else if hint_id.is_pointer() {
-                            add_type(Type::U64)
                         } else {
                             add_type(Type::I32)
                         }
@@ -454,7 +449,7 @@ impl Function {
                 };
 
                 let args = args
-                    .into_iter()
+                    .iter()
                     .map(|a| self.check_rvalue_expr(a, None))
                     .collect();
                 let kind = TirExprKind::Call { callee, args };

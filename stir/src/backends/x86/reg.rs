@@ -1,4 +1,6 @@
-#[derive(Clone, Debug, Copy)]
+use crate::backends::x86::{types::LLType, val::x86Value};
+
+#[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum Reg {
     A,
     B,
@@ -20,7 +22,7 @@ pub enum Reg {
 }
 
 impl Reg {
-    pub fn sized_print(&self, f: &mut std::fmt::Formatter<'_>, size: usize) -> std::fmt::Result {
+    pub fn sized_print(&self, f: &mut std::fmt::Formatter<'_>, bits: usize) -> std::fmt::Result {
         let names = match self {
             Reg::A => ["al", "ax", "eax", "rax"],
             Reg::B => ["bl", "bx", "ebx", "rbx"],
@@ -39,25 +41,30 @@ impl Reg {
             Reg::R14 => ["r14b", "r14w", "r14d", "r14"],
             Reg::R15 => ["r15b", "r15w", "r15d", "r15"],
             Reg::Virt(v) => {
-                let width_spec = match size {
+                let width_spec = match bits {
                     8 => "b",
                     16 => "w",
                     32 => "d",
                     64 => "q",
-                    _ => panic!("Size: {size} not supported"),
+                    _ => panic!("Size: {bits} not supported"),
                 };
                 return f.write_fmt(format_args!("%{v}{width_spec}"));
             }
         };
-        let sized_name = match size {
+        let sized_name = match bits {
             8 => names[0],
             16 => names[1],
             32 => names[2],
             64 => names[3],
             _ => {
-                panic!("Size: {size} not supported")
+                panic!("Size: {bits} not supported")
             }
         };
         f.write_str(sized_name)
     }
 }
+
+pub const RBP: x86Value = x86Value::reg(Reg::BP, LLType::I64);
+pub const RSP: x86Value = x86Value::reg(Reg::SP, LLType::I64);
+pub const RAX: x86Value = x86Value::reg(Reg::A, LLType::I64);
+pub const EAX: x86Value = x86Value::reg(Reg::A, LLType::I32);

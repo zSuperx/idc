@@ -2,7 +2,8 @@ const AUTOGEN_PATH: &str = "./spec";
 
 fn main() {
     println!("cargo::rerun-if-changed={AUTOGEN_PATH}");
-    autogen_file("x86", "./src/backends/x86/MIR/instr.rs");
+    autogen_file("x86", "./src/backends/x86/asm/instr.rs");
+    autogen_file("x86MIR", "./src/backends/x86/MIR/instr.rs");
     autogen_file("stir", "./src/isa/instr.rs");
 }
 

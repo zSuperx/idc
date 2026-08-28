@@ -1,7 +1,4 @@
-fn test_ret() -> i32 {
-  return 5;
-}
-
-fn test_ret_void() {
-  return;
+fn main() -> u8 {
+  let x = 8;
+  return @(u8)x;
 }

@@ -1,4 +1,4 @@
-fn test() -> i32 {
+fn main() -> i32 {
   let x = @(*i32)0;
   return *x;
 }

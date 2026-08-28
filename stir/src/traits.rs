@@ -1,7 +1,5 @@
 use std::fmt::{Debug, Display};
 
-use crate::builder::BBID;
-
 pub trait InstructionTrait: Display + Debug + Clone {
     type Val;
 

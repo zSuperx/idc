@@ -24,7 +24,7 @@ impl Display for RFLAG {
 }
 
 #[derive(Clone, Debug, Copy)]
-pub enum x86Val {
+pub enum x86MIRVal {
     Imm(i128),
     Reg {
         reg: Reg,
@@ -38,13 +38,13 @@ pub enum x86Val {
     CC(RFLAG),
 }
 
-impl x86Val {
-    pub const fn reg(reg: Reg, size: usize) -> x86Val {
-        x86Val::Reg { reg, size }
+impl x86MIRVal {
+    pub const fn reg(reg: Reg, size: usize) -> x86MIRVal {
+        x86MIRVal::Reg { reg, size }
     }
 
-    pub const fn addr(reg: Reg, offset: i128, size: usize) -> x86Val {
-        x86Val::Address {
+    pub const fn addr(reg: Reg, offset: i128, size: usize) -> x86MIRVal {
+        x86MIRVal::Address {
             base: reg,
             offset,
             size,
@@ -52,12 +52,12 @@ impl x86Val {
     }
 }
 
-impl Display for x86Val {
+impl Display for x86MIRVal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            x86Val::Imm(i) => f.write_fmt(format_args!("{i}")),
-            x86Val::Reg { reg, size } => reg.sized_print(f, *size),
-            x86Val::Address { base, offset, size } => {
+            x86MIRVal::Imm(i) => f.write_fmt(format_args!("{i}")),
+            x86MIRVal::Reg { reg, size } => reg.sized_print(f, *size),
+            x86MIRVal::Address { base, offset, size } => {
                 let width_spec = match size {
                     8 => "byte",
                     16 => "word",
@@ -74,17 +74,17 @@ impl Display for x86Val {
                 }
                 f.write_str("]")
             }
-            x86Val::CC(flags) => flags.fmt(f),
+            x86MIRVal::CC(flags) => flags.fmt(f),
         }
     }
 }
 
-pub const RBP: x86Val = x86Val::Reg {
+pub const RBP: x86MIRVal = x86MIRVal::Reg {
     reg: Reg::BP,
     size: 64,
 };
 
-pub const RSP: x86Val = x86Val::Reg {
+pub const RSP: x86MIRVal = x86MIRVal::Reg {
     reg: Reg::SP,
     size: 64,
 };

@@ -1,7 +1,7 @@
 __pycache__/
 .direnv/
 /target
-out/
+tests/out
 *.s
 *.ir
 *.o

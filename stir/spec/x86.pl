@@ -7,7 +7,7 @@ use FindBin qw($Bin);
 require "$Bin/utils/printers.pl";
 
 # Meta-constants: Rust types used in ISA definition
-my $VAL = "x86Val";
+my $VAL = "x86Value";
 my $INSTR = "x86Instr";
 my $BB = "BBID";
 
@@ -40,13 +40,13 @@ my $isa = {
   value => $VAL,
   specFile => __FILE__,
   extraCode => [
-    "use super::*;"
+    "use crate::backends::x86::val::*;"
   ],
 
   instructions => {
     comment => {
       args => [ "s:String" ],
-      fmt => "; {s}",
+      fmt  => "; {s}",
     },
 
     add => $accumOp,
@@ -64,6 +64,11 @@ my $isa = {
     #   defs = [ "RAX", "rs1" ],
     #   fmt = "imul {rs1}",
     # },
+
+    cmp => {
+      args => [ "rs1:$VAL", "rs2:$VAL" ],
+      uses => [ "rs1", "rs2" ],
+    },
 
     jl  => $jcc,
     jle => $jcc,
@@ -93,12 +98,12 @@ my $isa = {
 
     pop  => {
       args => [ "dst:$VAL" ],
-      defs => [ "{dst}" ],
+      defs => [ "dst" ],
     },
 
     push => {
       args => [ "rs1:$VAL" ],
-      uses => [ "{rs1}" ],
+      uses => [ "rs1" ],
     }
   },
 };

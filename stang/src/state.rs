@@ -43,7 +43,7 @@ pub struct GlobalState {
     pub symbol_counter: usize,
 }
 
-pub static mut GLOBAL_STATE: LazyLock<GlobalState> = LazyLock::new(|| GlobalState::new());
+pub static mut GLOBAL_STATE: LazyLock<GlobalState> = LazyLock::new(GlobalState::new);
 pub static SOURCE: OnceLock<Vec<u8>> = OnceLock::new();
 pub static mut STRINGS: LazyLock<HashSet<String>> = LazyLock::new(HashSet::new);
 
@@ -157,7 +157,7 @@ pub fn resolve_top_level(objects: &Vec<Spanned<HirObj>>) {
 
 /// Resolves a Type::Unresolved(..) into a Type
 pub fn resolve_type(s @ Spanned { inner: ty, span }: &Spanned<TypeId>) -> TypeId {
-    let ty = match ty.lookup() {
+    match ty.lookup() {
         Type::Unresolved(name) => {
             let Some(id) = get_state().type_names.get(name) else {
                 die!("Unknown type {name}: {span}")
@@ -169,9 +169,8 @@ pub fn resolve_type(s @ Spanned { inner: ty, span }: &Spanned<TypeId>) -> TypeId
             let inner_ty = resolve_type(&Spanned::new(*id, *span));
             add_type(Type::Pointer(inner_ty))
         }
-        _ => return s.inner,
-    };
-    ty
+        _ => s.inner,
+    }
 }
 
 fn resolve_global_types(Spanned { inner: obj, span }: &Spanned<HirObj>) {

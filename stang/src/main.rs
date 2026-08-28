@@ -147,22 +147,16 @@ fn validate_config() -> Config {
 
     let mut action_opt = None;
 
-    if args.emit_ir {
-        if action_opt.replace(Action::EmitIr).is_some() {
-            die!("Only 1 action can be performed. See -h");
-        }
+    if args.emit_ir && action_opt.replace(Action::EmitIr).is_some() {
+        die!("Only 1 action can be performed. See -h");
     }
 
-    if args.emit_asm {
-        if action_opt.replace(Action::EmitAsm).is_some() {
-            die!("Only 1 action can be performed. See -h");
-        }
+    if args.emit_asm && action_opt.replace(Action::EmitAsm).is_some() {
+        die!("Only 1 action can be performed. See -h");
     }
 
-    if args.compile_only {
-        if action_opt.replace(Action::CompileOnly).is_some() {
-            die!("Only 1 action can be performed. See -h");
-        }
+    if args.compile_only && action_opt.replace(Action::CompileOnly).is_some() {
+        die!("Only 1 action can be performed. See -h");
     }
 
     let action = action_opt.unwrap_or(Action::AssembleAndLink);

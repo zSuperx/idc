@@ -30,46 +30,40 @@ pub enum Type {
 
 impl Type {
     pub fn is_integral(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Type::I8
-            | Type::U8
-            | Type::I16
-            | Type::U16
-            | Type::I32
-            | Type::U32
-            | Type::I64
-            | Type::U64 => true,
-            _ => false,
-        }
+                | Type::U8
+                | Type::I16
+                | Type::U16
+                | Type::I32
+                | Type::U32
+                | Type::I64
+                | Type::U64
+        )
     }
 
     pub fn is_primitive(&self) -> bool {
-        match self {
+        matches!(
+            self,
             Type::I8
-            | Type::U8
-            | Type::I16
-            | Type::U16
-            | Type::I32
-            | Type::U32
-            | Type::I64
-            | Type::U64
-            | Type::Bool => true,
-            _ => false,
-        }
+                | Type::U8
+                | Type::I16
+                | Type::U16
+                | Type::I32
+                | Type::U32
+                | Type::I64
+                | Type::U64
+                | Type::Bool
+        )
     }
 
     pub fn is_signed(&self) -> bool {
-        match self {
-            Type::I8 | Type::I16 | Type::I32 | Type::I64 => true,
-            _ => false,
-        }
+        matches!(self, Type::I8 | Type::I16 | Type::I32 | Type::I64)
     }
 
     pub fn is_pointer(&self) -> bool {
-        match self {
-            Type::Pointer(..) => true,
-            _ => false,
-        }
+        matches!(self, Type::Pointer(..))
     }
 
     pub fn get_pointee(&self) -> TypeId {
@@ -103,7 +97,7 @@ impl Type {
     }
 
     pub fn bytes(&self) -> usize {
-        (self.bits() + 7) / 8
+        self.bits().div_ceil(8)
     }
 
     pub fn toIRType(&self) -> IRType {

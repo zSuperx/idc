@@ -1,34 +1,29 @@
-use crate::{
-    IRs::{hir::HirObj},
-    state::*,
-};
+use crate::{IRs::hir::HirObj, state::*};
 
-use stir::isa::*;
-use stir::builder::IRBuilder;
-use stir::backends::x86::Backend;
+use stir::backends::x86;
 
 pub fn compile_program(filename: &'static str) {
     let parsed_objects = get_state().parse_file(filename);
 
     resolve_top_level(&parsed_objects);
 
-    let mut builder = IRBuilder::<IRInstr>::default();
+    let mut functions = vec![];
     for obj in parsed_objects {
         match obj.inner {
             HirObj::Fn(parsed_function) => {
                 let mut function = Function::new(parsed_function);
-                function.codegen_func(&mut builder);
+                functions.push(function.codegen_func());
             }
             HirObj::Global { name, ty, rhs } => todo!(),
             HirObj::Struct { name, fields } => todo!(),
         }
     }
 
-    builder.print_all_functions();
+    let mut backend = x86::Backend::new();
 
-    {
-        let mut backend = Backend::new();
-        backend.translate(&builder);
-        backend.print_all_functions();
+    for function in functions {
+        function.print();
+        println!();
+        backend.lower(&function).print();
     }
 }

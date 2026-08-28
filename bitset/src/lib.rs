@@ -15,7 +15,7 @@ impl BitSet {
     ///
     /// This does nothing fancy at the moment, it literally just runs a for loop to insert all
     /// items.
-    pub fn from_iter(items: impl Iterator<Item = usize>) -> Self {
+    pub fn from_iterator(items: impl Iterator<Item = usize>) -> Self {
         let mut s = Self::new();
         for i in items {
             s.insert(i);
