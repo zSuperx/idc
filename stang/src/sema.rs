@@ -16,6 +16,7 @@ impl Function {
         self.symbol_table.insert(
             symbol,
             SymbolInfo {
+                symbol,
                 raw_name: name,
                 ty,
                 kind,
@@ -58,7 +59,7 @@ impl Function {
             loop_labels: Default::default(),
             loop_depth: 0,
             symbol_table: Default::default(),
-            node: None,
+            body: None,
         };
 
         // Type check the function header
@@ -75,6 +76,7 @@ impl Function {
             function.symbol_table.insert(
                 argsym,
                 SymbolInfo {
+                    symbol: argsym,
                     raw_name: argname,
                     ty: var_ty,
                     kind: SymbolKind::Arg(i),
@@ -89,7 +91,7 @@ impl Function {
         // Type check the function body
         let body = function.check_stmt(*body);
         function.env.pop_scope();
-        function.node = Some(body);
+        function.body = Some(body);
         function
     }
 
@@ -355,6 +357,48 @@ impl Function {
                     inner: Box::new(ptr),
                 };
                 TirExpr::new(kind, ty)
+            }
+            HirExpr::Field { base, field } => {
+                let mut base = self.check_rvalue_expr(base, None);
+                let s = base.ty.lookup();
+                let Type::Base { name, fields } = s else {
+                    die!("Type {s} is not a struct type. {span}");
+                };
+                let mut offset = 0;
+                let mut maybe_field_ty = None;
+                for (field_name, field_ty) in fields.iter() {
+                    if field_name == field {
+                        maybe_field_ty = Some(*field_ty);
+                        break;
+                    }
+                    // TODO: this can't be bytes, this is pointer math so it needs to be scaled down
+                    // by field size
+                    offset += field_ty.bytes();
+                }
+
+                let Some(field_ty) = maybe_field_ty else {
+                    die!("Struct {s} has no field {field}");
+                };
+                base.ty = add_type(Type::Pointer(field_ty));
+                let ptr = {
+                    let num = {
+                        let kind = TirExprKind::Num(offset as i128);
+                        let ty = add_type(Type::U64);
+                        TirExpr::new(kind, ty)
+                    };
+                    let ty = add_type(Type::Pointer(field_ty));
+                    let kind = TirExprKind::Bin {
+                        op: BinOp::PtrAdd,
+                        lhs: Box::new(base),
+                        rhs: Box::new(num),
+                    };
+                    TirExpr::new(kind, ty)
+                };
+                let kind = TirExprKind::Load {
+                    inner: Box::new(ptr),
+                };
+
+                TirExpr::new(kind, field_ty)
             }
             // I hope this is right...
             HirExpr::AddrOf { inner } => self.check_lvalue_expr(inner, hint),

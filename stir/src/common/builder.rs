@@ -1,32 +1,47 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
+use std::rc::Rc;
+
+use registry::{Id, Registry};
+
+use crate::isa::IRType;
 
 use super::basicblock::{BBID, BasicBlock};
 use super::traits::InstructionTrait;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StructDef {
+    pub(crate) size: usize,
+    pub(crate) alignment: usize,
+    pub(crate) fields: Vec<IRType>,
+}
+
 #[derive(Debug, Clone)]
-pub struct FunctionBuilder<I: InstructionTrait, T> {
-    pub(crate) cursor: BBID<I>,
+pub struct FunctionBuilder<I: InstructionTrait, V, T> {
     pub(crate) name: &'static str,
+    pub(crate) cursor: BBID<I>,
+    pub(crate) args: Vec<(V, T)>,
     pub(crate) return_type: T,
     pub(crate) entrypoint: BBID<I>,
     pub(crate) reg_count: usize,
     pub(crate) block_count: usize,
+    pub(crate) structs: Rc<RefCell<Registry<StructDef>>>,
     pub(crate) blocks: HashMap<BBID<I>, BasicBlock<I>>,
 }
 
-#[macro_export]
 /// Given an `IRBuilder<I>` and format args, expands to `$builder.emit(Comment(format!(...)))`
 ///
 /// This relies on the existence of an `I::Comment(String)` instruction for the instruction type of
 /// the `IRBuilder`.
+#[macro_export]
 macro_rules! comment {
     ($builder:expr, $($fmtargs:tt)*) => {
         $builder.emit(Comment(format!($($fmtargs)*)))
     }
 }
 
-impl<I: InstructionTrait, T> FunctionBuilder<I, T> {
+impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
     /// Creates a new IR Function builder. The function is initialized with an empty BasicBlock as
     /// its entrypoint.
     ///
@@ -42,11 +57,21 @@ impl<I: InstructionTrait, T> FunctionBuilder<I, T> {
             cursor,
             name,
             return_type,
-            entrypoint: cursor,
             reg_count,
             block_count,
             blocks,
+            entrypoint: cursor,
+            args: Default::default(),
+            structs: Default::default(),
         }
+    }
+
+    pub fn addArg(&mut self, arg_value: V, arg_type: T) {
+        self.args.push((arg_value, arg_type));
+    }
+
+    pub fn addStruct(&mut self, s: StructDef) -> Id<StructDef> {
+        self.structs.borrow_mut().add(s)
     }
 
     /// Returns the name of the function
@@ -134,6 +159,10 @@ impl<I: InstructionTrait, T> FunctionBuilder<I, T> {
         false
     }
 
+    /// Performs a visitor pass that verifies no reachable block in the function lacks a terminator.
+    /// 
+    /// Upon finding an invalid block, the verifier either breaks with `false`, OR if a
+    /// `default_return` instruction is provided, will set the block's terminator to that.
     pub fn verify(&mut self, default_return: Option<I>) -> bool {
         !self.dfs_mut(|_id, block| {
             if block.terminator.is_none() {

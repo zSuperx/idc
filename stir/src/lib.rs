@@ -3,9 +3,9 @@
 #![allow(unused)]
 
 pub(crate) mod common;
-pub(crate) mod targets;
+pub(crate) mod target;
 
-pub use targets::stir::builder;
-pub use targets::stir::isa;
+pub use target::stir::builder;
+pub use target::stir::isa;
 
-pub use targets::x86::Backend as x86Backend;
+pub use target::x86::Backend as x86Backend;

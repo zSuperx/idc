@@ -36,7 +36,7 @@ some point.
       `sizeof` token.
 
 - [ ] Add better diagnostics. 
-    - Don't `die!()` upon facing any error
+    - Don't `die!()` upon facing _every_ error
     - Instead, try and bail out and parse/type check the next logical object
       - This can include parse errors or sema errors
       - If we fail to parse/sema check a statement, check the next statement (if in block)
@@ -48,19 +48,14 @@ some point.
     - It can be vastly improved by popping items out of a worklist. When a
       basic block sees its `LIVE` sets change, it should push its predecessors
       into the worklist.
-    - The issue is that there is currently no way to find a basic block's
-      predecessors. This is a TODO for when that API gets overhauled. For now,
-      it just loops forever until convergence.
-
-- [ ] Improve the IRFunction builder API
-    - First of all, define type aliases
-      - type STFunction = IRFunction<IRInstr, IRType>
-      - type x86Function = IRFunction<x86Instr, LLType>
-    - Then define custom impls on those types (i.e. print)
-    - Add function arguments to the IRFunction struct and a way to lower them for function calls
 
 - [ ] Add optimizations.
     - This should be a lot easier to do now that I have a visitor dfs function in place on the builder API
+    - Actually its not so simple, I need a way to mutably iterate through a
+      function's blocks while being able to peek at and mutate other blocks
+      - This enables, for example, merging degenerate blocks together:
+        - `if curr.successors == [succ_id] && successor.predecessors == [curr_id]`
+        - then merge `curr` and `succ`
 
 - [ ] Function calls (x86):
     - This is harder than I first thought.
@@ -69,6 +64,13 @@ some point.
         - The first 6 "eightbyte" arguments are passed via registers
         - This includes structs. HOWEVER, if there are e.g. 3 registers left
           and a struct has 4 "eightbyte" fields, it gets put completely on the stack
+    - I'd like an interface where frontend users DONT have to worry about ABIs
+        - aka they can just emit 
+            - `ptr %1 = getaddr ptr %0, i32, #0 (where %0 is a struct ptr)`
+            - `%2 = load i32 from ptr %1`
+        - my backend should figure out ABI and lift %1 to a register, then
+          replace all uses of %2 with %1 instead (if in SysV the struct can fit
+          entirely in registers)
 
 - [ ] Arrays:
     - I really don't understand the frontend implementation:
@@ -104,11 +106,17 @@ some point.
 
 ### Finished
 
+- [x] Improve the IRFunction builder API
+    - First of all, define type aliases
+      - type IRFunction = FunctionBuilder<IRInstr, IRType>
+      - type x86Function = FunctionBuilder<x86Instr, LLType>
+    - Then define custom impls on those types (i.e. print)
+    - Add function arguments to the IRFunction struct and a way to lower them for function calls
+
 - [x] `sizeof(x)`:
     - This should be easy, since every type has a size, and every expression
       has a type
     - Probably add `alignof(x)` while you're at it
-
 
 - [x] Change LirVal::Mem (and x86Val::Mem) to include compex addressing modes:
       - DONT lower Expr::Index to (Deref + Add + Mul) subexpr, as a lot of

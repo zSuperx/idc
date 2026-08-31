@@ -8,12 +8,11 @@ use std::sync::LazyLock;
 
 use clap::{Parser, ValueEnum};
 
-use crate::driver::compile_program;
+use crate::{IRs::hir::HirObj, state::*};
 
 mod ast;
-mod sema;
-mod driver;
 mod codegen;
+mod sema;
 mod state;
 // mod optimize;
 mod IRs;
@@ -24,96 +23,44 @@ mod validate;
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);
 
 fn main() {
-    compile_program(&CFG.input);
+    let parsed_objects = get_state().parse_file(&CFG.input);
 
-    // let mut buf = String::new();
-    // match CFG.target {
-    //     Target::x86 => {
-    //         buf.insert_str(0, "section .text\nglobal main\n");
-    //     }
-    // }
-    //
-    // // Linearize
-    // for func in prog {
-    //     match CFG.action {
-    //         Action::EmitIr => buf.write_fmt(format_args!("{}", func)).unwrap(),
-    //         _ => match CFG.target {
-    //             Target::x86 => {
-    //                 // let mut emitter = x86::Emitter::new();
-    //                 // let func = emitter.translate_func(func);
-    //                 // buf.write_fmt(format_args!("{func}")).unwrap();
-    //             }
-    //         },
-    //     }
-    // }
-    //
-    // match CFG.action {
-    //     Action::EmitIr | Action::EmitAsm => {
-    //         if CFG.output == "-" {
-    //             println!("{buf}");
-    //         } else {
-    //             std::fs::write(&CFG.output, &buf).unwrap();
-    //         }
-    //         return;
-    //     }
-    //
-    //     Action::CompileOnly => {
-    //         if CFG.output == "-" {
-    //             die!("Can only output to stdout when emitting assembly or IR (see -S or -E)");
-    //         }
-    //         let asm = tempfile::NamedTempFile::new().unwrap();
-    //
-    //         std::fs::write(asm.path(), &buf).unwrap();
-    //
-    //         let status = Command::new("nasm")
-    //             .arg("-felf64")
-    //             .arg(asm.path())
-    //             .arg("-o")
-    //             .arg(&CFG.output)
-    //             .status()
-    //             .unwrap();
-    //
-    //         if !status.success() {
-    //             die!("assembly failed");
-    //         }
-    //
-    //         return;
-    //     }
-    //
-    //     Action::AssembleAndLink => {
-    //         if CFG.output == "-" {
-    //             die!("Can only output to stdout when emitting assembly or IR (see -S or -E)");
-    //         }
-    //         let asm = tempfile::NamedTempFile::new().unwrap();
-    //         let obj = tempfile::NamedTempFile::new().unwrap();
-    //
-    //         std::fs::write(asm.path(), &buf).unwrap();
-    //
-    //         let status = Command::new("nasm")
-    //             .arg("-felf64")
-    //             .arg(asm.path())
-    //             .arg("-o")
-    //             .arg(obj.path())
-    //             .status()
-    //             .unwrap();
-    //
-    //         if !status.success() {
-    //             die!("assembling failed");
-    //         }
-    //
-    //         let status = Command::new("mold")
-    //             .arg(obj.path())
-    //             .arg("runtime/rt.o")
-    //             .arg("-o")
-    //             .arg(&CFG.output)
-    //             .status()
-    //             .unwrap();
-    //
-    //         if !status.success() {
-    //             die!("linking failed");
-    //         }
-    //     }
-    // }
+    resolve_top_level(&parsed_objects);
+
+    let mut functions = vec![];
+    for obj in parsed_objects {
+        match obj.inner {
+            HirObj::Fn(parsed_function) => {
+                let mut function = Function::new(parsed_function);
+                functions.push(function.codegen_func());
+            }
+            HirObj::Global { name, ty, rhs } => todo!("deal with global"),
+            HirObj::Struct { name, fields } => {
+            }
+        }
+    }
+
+    let mut backend = match CFG.target {
+        Target::x86 => stir::x86Backend::new(),
+    };
+
+    match CFG.action {
+        Action::EmitIr => {
+            for function in functions.iter() {
+                function.print(CFG.verbose);
+                println!();
+            }
+            println!()
+        }
+        Action::EmitAsm => {
+            for function in functions.iter() {
+                backend.lower(function).print(CFG.verbose);
+                println!();
+            }
+        }
+        Action::CompileOnly => todo!(),
+        Action::AssembleAndLink => todo!(),
+    }
 }
 
 #[allow(nonstandard_style)]

@@ -3,20 +3,20 @@ use crate::{
         basicblock::{BBID, BasicBlock},
         builder::FunctionBuilder,
     },
-    targets::stir::isa::{IRInstr, IRType},
+    target::x86::isa::{LLType, x86Instr, x86Value},
 };
 
-pub type IRBB = BBID<IRInstr>;
-pub type IRBasicBlock = BasicBlock<IRInstr>;
-pub type IRFunction = FunctionBuilder<IRInstr, IRType>;
+pub type x86BB = BBID<x86Instr>;
+pub type x86BasicBlock = BasicBlock<x86Instr>;
+pub type x86Function = FunctionBuilder<x86Instr, x86Value, LLType>;
 
-impl IRFunction {
+impl x86Function {
     pub fn print(&self, include_comments: bool) {
         println!("{}:", self.name);
         self.dfs(|id, block| {
             println!("{id}:");
             for i in block.instructions.iter() {
-                if matches!(i, IRInstr::Comment(..)) && !include_comments {
+                if matches!(i, x86Instr::Comment(..)) && !include_comments {
                     continue;
                 }
                 println!("\t{i}");
@@ -30,3 +30,5 @@ impl IRFunction {
         });
     }
 }
+
+

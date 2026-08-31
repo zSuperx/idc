@@ -104,8 +104,8 @@ my $isa = {
   },
 
   extraCode => [
-    "use crate::targets::x86::isa::*;",
-    "use crate::targets::x86::builder::*;",
+    "use crate::target::x86::isa::*;",
+    "use crate::target::x86::builder::*;",
   ],
   specFile => __FILE__,
 };

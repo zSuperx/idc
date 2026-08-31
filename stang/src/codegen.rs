@@ -1,14 +1,93 @@
 use crate::IRs::tir::*;
 use crate::ast::{BinOp, Type};
 use crate::die;
-use crate::state::{Function, SymbolKind, add_type};
+use crate::state::{Function, LoopLabelPair, SymbolKind, add_type};
 
 use IRInstr::*;
 use stir::builder::*;
-use stir::isa::*;
 use stir::comment;
+use stir::isa::*;
 
 impl Function {
+    /// Binds all local variables and function arguments to virtual registers.
+    /// Arguments are resolved first, in order, followed by locals
+    ///
+    /// The order of each family of variables (args/locals) is done alphabetically so as to avoid
+    /// randomness in the compiled output
+    pub fn codegen_locals(&mut self, builder: &mut IRFunction) {
+        let mut args = vec![];
+        let mut locals = vec![];
+
+        for (symbol, info) in self.symbol_table.iter() {
+            match info.kind {
+                SymbolKind::Local => locals.push(*symbol),
+                SymbolKind::Arg(_) => args.push(*symbol),
+                SymbolKind::Global => todo!(),
+                SymbolKind::Function => todo!(),
+            }
+        }
+
+        // Sort argument symbols by their index
+        args.sort_by_key(|s| {
+            let info = self.symbol_table.get(s).unwrap();
+            let SymbolKind::Arg(i) = info.kind else {
+                unreachable!()
+            };
+            i
+        });
+
+        // Primitive args are alloca'd and filled normally, while structs are implicitly passed as pointers
+        for symbol in args {
+            let info = self.symbol_table.get_mut(&symbol).unwrap();
+            let val = match info.ty.lookup() {
+                Type::Base { name, fields } => {
+                    let arg = IRValue::Ptr(builder.nextReg());
+                    builder.addArg(arg, IRType::Ptr);
+                    arg
+                }
+                ty => {
+                    let arg = IRValue::Reg(builder.nextReg());
+                    let dst = IRValue::Ptr(builder.nextReg());
+                    let irty = ty.toIRType();
+                    builder.emit(Alloca(irty, dst));
+                    comment!(builder, "Argument {symbol} -> {dst}");
+                    builder.addArg(arg, irty);
+                    builder.emit(Store(irty, dst, arg));
+                    dst
+                }
+            };
+            comment!(builder, "Argument {symbol} lives in {val}");
+            info.value = Some(val);
+        }
+
+        // Sort locals by their local variable name
+        locals.sort_by_key(|s| {
+            let info = self.symbol_table.get(s).unwrap();
+            let SymbolKind::Arg(i) = info.kind else {
+                unreachable!()
+            };
+            i
+        });
+
+        // Local variables are alloca'd but not initialized to anything
+        for symbol in locals {
+            let info = self.symbol_table.get_mut(&symbol).unwrap();
+            let val = match info.ty.lookup() {
+                Type::Base { name, fields } => {
+                    todo!("Figure out how to alloca aggregate types")
+                }
+                ty => {
+                    let dst = IRValue::Ptr(builder.nextReg());
+                    let irty = ty.toIRType();
+                    builder.emit(Alloca(irty, dst));
+                    dst
+                }
+            };
+            comment!(builder, "Local {symbol} lives in {val}");
+            info.value = Some(val);
+        }
+    }
+
     pub fn codegen_func(&mut self) -> IRFunction {
         let irrty = match self.return_type.lookup() {
             Type::Void => IRType::I32,
@@ -16,33 +95,20 @@ impl Function {
         };
         let mut builder = IRFunction::new(self.name.inner, irrty);
 
-        for (sym, info) in self.symbol_table.iter_mut() {
-            let val = match info.kind {
-                SymbolKind::Local => {
-                    let dst = IRValue::ptr(builder.nextReg());
-                    comment!(builder, "{sym} -> {dst}");
-                    builder.emit(Alloca(info.ty.toIRType(), dst));
-                    dst
-                }
-                SymbolKind::Arg(i) => {
-                    let dst = IRValue::ptr(builder.nextReg());
-                    comment!(builder, "{sym} -> {dst}");
-                    builder.emit(Alloca(info.ty.toIRType(), dst));
-                    dst
-                }
-                _ => panic!("What"),
-            };
+        // Create register bindings for each symbol in this function (including arguments)
+        self.codegen_locals(&mut builder);
 
-            info.value = Some(val);
-        }
-
-        let body = self.node.clone().unwrap();
+        let body = self.body.clone().unwrap();
         self.codegen_stmt(&mut builder, &body);
+
+        // If the function returns Void type, then the default return to be inserted should be a
+        // IRInstr::Retv
         let default_return_instr = if *self.return_type.lookup() == Type::Void {
             Some(Retv)
         } else {
             None
         };
+
         if !builder.verify((*self.return_type == Type::Void).then_some(Retv)) {
             die!(
                 "Function doesn't return a value on some paths, but is expected to return {}: {}",
@@ -80,7 +146,10 @@ impl Function {
                 builder.addSuccessors(&[body_block, end_block]);
 
                 // Codegen the body stmt
-                self.loop_labels.push((cond_block, end_block));
+                self.loop_labels.push(LoopLabelPair {
+                    cond_block,
+                    end_block,
+                });
                 builder.setInsertPoint(body_block);
                 self.codegen_stmt(builder, body);
                 self.loop_labels.pop();
@@ -93,13 +162,21 @@ impl Function {
                 builder.setInsertPoint(end_block);
             }
             TirStmt::Continue => {
-                let Some((cond_block, _end_block)) = self.loop_labels.last() else {
+                let Some(LoopLabelPair {
+                    cond_block,
+                    end_block,
+                }) = self.loop_labels.last()
+                else {
                     die!("Continue statements can only be called within loops.");
                 };
                 builder.emit(Jmp(*cond_block));
             }
             TirStmt::Break => {
-                let Some((_cond_block, end_block)) = self.loop_labels.last() else {
+                let Some(LoopLabelPair {
+                    cond_block,
+                    end_block,
+                }) = self.loop_labels.last()
+                else {
                     die!("Continue statements can only be called within loops.");
                 };
                 builder.emit(Jmp(*end_block));
@@ -156,23 +233,24 @@ impl Function {
         }
     }
 
-    fn codegen_expr(
-        &mut self,
-        builder: &mut IRFunction,
-        expr: &TirExpr,
-    ) -> IRValue {
+    fn codegen_expr(&mut self, builder: &mut IRFunction, expr: &TirExpr) -> IRValue {
         match &expr.kind {
             TirExprKind::Void => panic!("Can't codegen `void` value"),
-            TirExprKind::Num(val) => IRValue::imm(*val),
-            TirExprKind::Bool(val) => IRValue::imm((*val).into()),
+            TirExprKind::Num(val) => IRValue::Imm(*val),
+            TirExprKind::Bool(val) => IRValue::Imm((*val).into()),
             TirExprKind::ValueOf(symbol) => {
                 let info = self.lookup_symbol(*symbol);
                 let irty = info.ty.toIRType();
                 let ptr = info.value.expect("Symbol doesn't have value");
-                assert!(ptr.is_mem());
-                let val = IRValue::from_type(builder.nextReg(), irty);
-                builder.emit(Load(irty, ptr, val));
-                val
+                assert!(ptr.is_mem(), "{symbol}: {info:?}");
+                if matches!(info.ty.lookup(), Type::Base { .. }) {
+                    ptr
+                } else {
+                    let val = IRValue::from_type(builder.nextReg(), irty);
+                    comment!(builder, "Loading {symbol}");
+                    builder.emit(Load(irty, ptr, val));
+                    val
+                }
             }
             TirExprKind::AddrOf(symbol) => {
                 let info = self.lookup_symbol(*symbol);
@@ -208,7 +286,7 @@ impl Function {
                         result
                     }
                     BinOp::Sub => {
-                        let result = IRValue::reg(builder.nextReg());
+                        let result = IRValue::Reg(builder.nextReg());
                         builder.emit(Sub(ty.toIRType(), result, lhs_val, rhs_val));
                         result
                     }
@@ -218,6 +296,7 @@ impl Function {
                             let base_ty = lhs.ty.get_pointee().toIRType();
                             builder.emit(Getaddr(dst, lhs_val, base_ty, rhs_val));
                         } else {
+                            println!("rhs ty: {}", rhs.ty);
                             let base_ty = rhs.ty.get_pointee().toIRType();
                             builder.emit(Getaddr(dst, rhs_val, base_ty, lhs_val));
                         }
@@ -225,7 +304,7 @@ impl Function {
                     }
                     BinOp::PtrSub => todo!(),
                     BinOp::Mul => {
-                        let result = IRValue::reg(builder.nextReg());
+                        let result = IRValue::Reg(builder.nextReg());
                         if lhs.ty.is_signed() {
                             builder.emit(Smul(ty.toIRType(), result, lhs_val, rhs_val));
                         } else {
@@ -234,7 +313,7 @@ impl Function {
                         result
                     }
                     BinOp::Div => {
-                        let result = IRValue::reg(builder.nextReg());
+                        let result = IRValue::Reg(builder.nextReg());
                         if lhs.ty.is_signed() {
                             builder.emit(Sdiv(ty.toIRType(), result, lhs_val, rhs_val));
                         } else {
@@ -243,19 +322,19 @@ impl Function {
                         result
                     }
                     BinOp::Eq => {
-                        let result = IRValue::reg(builder.nextReg());
+                        let result = IRValue::Reg(builder.nextReg());
                         let ty = add_type(Type::Bool);
                         builder.emit(Icmp(CmpOp::Eq, ty.toIRType(), result, lhs_val, rhs_val));
                         result
                     }
                     BinOp::Ne => {
-                        let result = IRValue::reg(builder.nextReg());
+                        let result = IRValue::Reg(builder.nextReg());
                         let ty = add_type(Type::Bool);
                         builder.emit(Icmp(CmpOp::Ne, ty.toIRType(), result, lhs_val, rhs_val));
                         result
                     }
                     BinOp::Le | BinOp::Lt | BinOp::Ge | BinOp::Gt => {
-                        let result = IRValue::reg(builder.nextReg());
+                        let result = IRValue::Reg(builder.nextReg());
                         let ty = lhs.ty;
                         let (signed, unsigned) = match op {
                             BinOp::Lt => (

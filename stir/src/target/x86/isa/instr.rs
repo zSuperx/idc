@@ -13,8 +13,8 @@ use crate::common::traits::InstructionTrait;
 use x86Instr::*;
 
 // Extra imports:
-use crate::targets::x86::isa::*;
-use crate::targets::x86::builder::*;
+use crate::target::x86::isa::*;
+use crate::target::x86::builder::*;
 
 #[derive(Debug, Clone)]
 pub enum x86Instr {

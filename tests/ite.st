@@ -1,7 +1,8 @@
 fn main() -> i32 {
-  if true {
-    return 69;
+  let x: i32 = 5;
+  if x > 2 {
+    return 100;
   } else {
-    return 420;
+    return 200;
   }
 }

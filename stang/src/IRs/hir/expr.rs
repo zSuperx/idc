@@ -26,6 +26,10 @@ pub enum HirExpr {
         base: Box<Spanned<HirExpr>>,
         index: Box<Spanned<HirExpr>>,
     },
+    Field {
+        base: Box<Spanned<HirExpr>>,
+        field: &'static str,
+    },
     Un {
         op: UnOp,
         rhs: Box<Spanned<HirExpr>>,

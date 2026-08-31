@@ -77,20 +77,28 @@ pub fn next_symbol(name: &str) -> Symbol {
     state.symbols.borrow_mut().add(format!("{name}.{id}"))
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct LoopLabelPair {
+    pub cond_block: IRBB,
+    pub end_block: IRBB,
+}
+
 #[derive(Debug)]
 pub struct Function {
     /// The raw name of the function
     pub name: Spanned<&'static str>,
+
     /// The symbol its mapped to (can be retrieved via global state, but put here for convenience)
     pub symbol: Symbol,
 
-    /// Tracks string -> symbol mappings. Lookups searches in an inner-most to outer-most fashion
+    /// Tracks string -> symbol mappings. Looking up a symbol by its string name starts at the inner
+    /// most (current) scope, going up in scopes
     pub env: Env<&'static str, Symbol>,
 
     /// Used by the codegen phase.
     /// Each entry is COND_BB, END_BB
     /// That is, `continue` jumps to COND_BB, and `break` jumps to END_BB
-    pub loop_labels: Vec<(IRBB, IRBB)>,
+    pub loop_labels: Vec<LoopLabelPair>,
 
     /// Loop depth tracks how many loops deep we are: +1 when entering, -1 when leaving
     /// Allows us to determine if `break` or `continue` were called from outside a loop
@@ -99,10 +107,11 @@ pub struct Function {
     /// The symbol table for this function. Holds info on local variables and function parameters
     pub symbol_table: HashMap<Symbol, SymbolInfo>,
 
+    /// The return type of this function.
     pub return_type: TypeId,
 
-    /// The AST node of the function
-    pub node: Option<TirStmt>,
+    /// The AST node of the function representing the body
+    pub body: Option<TirStmt>,
 }
 
 impl GlobalState {
@@ -137,6 +146,7 @@ pub enum SymbolKind {
 
 #[derive(Debug, Clone)]
 pub struct SymbolInfo {
+    pub symbol: Symbol,
     pub raw_name: Spanned<&'static str>,
     pub ty: TypeId,
     pub kind: SymbolKind,
@@ -160,7 +170,7 @@ pub fn resolve_type(s @ Spanned { inner: ty, span }: &Spanned<TypeId>) -> TypeId
     match ty.lookup() {
         Type::Unresolved(name) => {
             let Some(id) = get_state().type_names.get(name) else {
-                die!("Unknown type {name}: {span}")
+                die!("Unknown type {s}")
             };
             *id
         }
@@ -183,7 +193,14 @@ fn resolve_global_types(Spanned { inner: obj, span }: &Spanned<HirObj>) {
         }) => {}
         HirObj::Global { name, ty, rhs } => {}
         HirObj::Struct { name, fields } => {
-            add_type(Type::Base(name.inner));
+            let s = add_type(Type::Base {
+                name: name.inner,
+                fields: fields
+                    .iter()
+                    .map(|(n, t)| (n.inner, resolve_type(t)))
+                    .collect(),
+            });
+            get_state().type_names.insert(name.inner, s);
         }
     }
 }
@@ -212,6 +229,7 @@ fn resolve_global_names(Spanned { inner: obj, span }: &Spanned<HirObj>) {
             get_state().symbol_table.insert(
                 symbol,
                 SymbolInfo {
+                    symbol,
                     raw_name: *name,
                     ty,
                     kind: SymbolKind::Function,

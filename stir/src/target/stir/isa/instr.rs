@@ -13,8 +13,8 @@ use crate::common::traits::InstructionTrait;
 use IRInstr::*;
 
 // Extra imports:
-use crate::targets::stir::isa::*;
-use crate::targets::stir::builder::*;
+use crate::target::stir::isa::*;
+use crate::target::stir::builder::*;
 
 #[derive(Debug, Clone)]
 pub enum IRInstr {

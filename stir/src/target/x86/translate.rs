@@ -1,29 +1,16 @@
 use std::collections::HashMap;
 
+use crate::builder::IRFunction;
 ///
 /// Lowers from STIR to x86 MIR
 ///
 use crate::comment;
 use crate::common::builder::*;
-use crate::targets::stir::isa::*;
-use crate::targets::x86::isa::*;
+use crate::target::stir::isa::*;
+use crate::target::x86::Backend;
+use crate::target::x86::builder::x86Function;
+use crate::target::x86::isa::*;
 use x86Instr::*;
-
-#[derive(Default)]
-pub struct Backend {
-    v2p: HashMap<IRValue, x86Value>,
-    v_rsp: i128,
-}
-
-fn lowerIRType(ty: &IRType) -> LLType {
-    match ty {
-        IRType::I1 => LLType::I1,
-        IRType::I8 => LLType::I8,
-        IRType::I16 => LLType::I16,
-        IRType::I32 => LLType::I32,
-        IRType::Ptr | IRType::I64 => LLType::I64,
-    }
-}
 
 impl Backend {
     pub fn new() -> Self {
@@ -32,11 +19,11 @@ impl Backend {
 
     fn createFrameSlot(
         &mut self,
-        builder: &mut FunctionBuilder<x86Instr, LLType>,
+        builder: &mut x86Function,
         value: &IRValue,
         ty: &IRType,
     ) -> x86Value {
-        let ty = lowerIRType(ty);
+        let ty = LLType::fromIRType(ty);
         self.v_rsp -= ty.bytes() as i128;
         builder.emit(Sub(RSP, x86Value::Imm(ty.bytes() as i128)));
         let slot = x86Value::memDisp(Reg::BP, self.v_rsp, ty);
@@ -44,20 +31,21 @@ impl Backend {
         slot
     }
 
-    fn lowerToReg(
-        &self,
-        builder: &mut FunctionBuilder<x86Instr, LLType>,
-        value: &IRValue,
-        ty: LLType,
-    ) -> x86Value {
-        match value.kind {
-            IRValueKind::Imm(i) => {
+    fn lowerToReg(&self, builder: &mut x86Function, value: &IRValue, ty: LLType) -> x86Value {
+        match value {
+            IRValue::Arg(n) => {
+                let arg = &builder.args[*n];
+                // if the n'th argument is a struct, we can't turn it into a register
+                panic!("Cannot lower aggregate value {value} to a single register");
+                // else if its a register or pointer we chilling, just treat it as that
+            }
+            IRValue::Imm(i) => {
                 let reg = x86Value::reg(Reg::Virt(builder.nextReg()), ty);
-                builder.emit(Mov(reg, x86Value::Imm(i)));
+                builder.emit(Mov(reg, x86Value::Imm(*i)));
                 reg
             }
-            IRValueKind::Reg(r) => x86Value::reg(Reg::Virt(r), ty),
-            IRValueKind::Ptr(r) => {
+            IRValue::Reg(r) => x86Value::reg(Reg::Virt(*r), ty),
+            IRValue::Ptr(r) => {
                 if let Some(s) = self.v2p.get(value) {
                     assert!(matches!(s, x86Value::Mem { .. }));
                     // If this pointer is mapped to a physical address (i.e. [rbp - 8])
@@ -68,7 +56,7 @@ impl Backend {
                 } else {
                     // But if it's a new pointer, we don't have to bind it to a physical address
                     // We also don't need to emit a lea, since address of [%1] is just %1
-                    x86Value::reg(Reg::Virt(r), ty)
+                    x86Value::reg(Reg::Virt(*r), ty)
                 }
             }
         }
@@ -78,25 +66,26 @@ impl Backend {
         if let Some(s) = self.v2p.get(value) {
             return *s;
         }
-        if let IRValueKind::Ptr(r) = value.kind {
-            x86Value::mem(Reg::Virt(r), ty)
+        if let IRValue::Ptr(r) = value {
+            x86Value::mem(Reg::Virt(*r), ty)
         } else {
             panic!("cant turn {value} into pointer")
         }
     }
 
-    pub fn lower(
-        &mut self,
-        stir_function: &FunctionBuilder<IRInstr, IRType>,
-    ) -> FunctionBuilder<x86Instr, LLType> {
+    pub(crate) fn translate(&mut self, stir_function: &IRFunction) {
         // Create the function
-        let rty = lowerIRType(stir_function.getReturnType());
-        let mut new_function = FunctionBuilder::new(stir_function.name(), rty);
+        let rty = LLType::fromIRType(stir_function.getReturnType());
+        let mut new_function = x86Function::new(stir_function.name(), rty);
+        for argty in stir_function.args.iter() {
+            // self.ir_args.push(*argty);
+        }
+
         let builder = &mut new_function;
         builder.setRegCount(stir_function.getRegCount());
 
+        // Do a first pass to register all blocks in a map
         let mut block_map = HashMap::new();
-
         stir_function.dfs(|id, block| {
             let curr = builder.newNamedBlock(block.name);
             block_map.insert(id, curr);
@@ -107,7 +96,7 @@ impl Backend {
         let stir_ep = stir_function.getEntryPoint();
         let body = block_map[&stir_ep];
 
-        // Create prologue and epilogue
+        // Create prologue
         let prologue = builder.newNamedBlock("prologue");
         builder.setEntryPoint(prologue);
         builder.setInsertPoint(prologue);
@@ -116,14 +105,14 @@ impl Backend {
         builder.emit(Jmp(body));
         builder.addSuccessors(&[body]);
 
+        // Create epilogue
         let epilogue = builder.newNamedBlock("epilogue");
         builder.setInsertPoint(epilogue);
         builder.emit(Mov(RSP, RBP));
         builder.emit(Pop(RBP));
         builder.emit(Ret);
 
-        // Perform a visitor pass through the function and translate each block
-        // to  one at a time
+        // Perform a visitor pass through the function and translate each block one at a time
         stir_function.dfs(|id, block| {
             let curr = block_map[&id];
             builder.setInsertPoint(curr);
@@ -137,19 +126,19 @@ impl Backend {
                         builder.emit(Jmp(b));
                     }
                     IRInstr::Store(ty, ptr, rs1) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let ptr = self.lowerToPtr(ptr, 0, llty);
                         let rs1 = self.lowerToReg(builder, rs1, llty);
                         builder.emit(Mov(ptr, rs1));
                     }
                     IRInstr::Load(ty, ptr, dst) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let ptr = self.lowerToPtr(ptr, 0, llty);
                         let dst = self.lowerToReg(builder, dst, llty);
                         builder.emit(Mov(dst, ptr));
                     }
                     IRInstr::Copy(ty, dst, rs1) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let dst = self.lowerToReg(builder, dst, llty);
                         let rs1 = self.lowerToReg(builder, rs1, llty);
                         builder.emit(Mov(dst, rs1));
@@ -160,7 +149,7 @@ impl Backend {
                     | IRInstr::Udiv(ty, dst, rs1, rs2)
                     | IRInstr::Umul(ty, dst, rs1, rs2)
                     | IRInstr::Add(ty, dst, rs1, rs2) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let dst = self.lowerToReg(builder, dst, llty);
                         let rs1 = self.lowerToReg(builder, rs1, llty);
                         let rs2 = self.lowerToReg(builder, rs2, llty);
@@ -177,7 +166,7 @@ impl Backend {
                         builder.emit(op(dst, rs2));
                     }
                     IRInstr::Icmp(cmp, ty, dst, rs1, rs2) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let rs1 = self.lowerToReg(builder, rs1, llty);
                         let rs2 = self.lowerToReg(builder, rs2, llty);
                         builder.emit(Cmp(rs1, rs2));
@@ -224,11 +213,11 @@ impl Backend {
                     // TODO: Improve the getaddr IR instruction to take multi-dimensional offsets
                     // Then just input those to memFull as scale, index, and disp
                     IRInstr::Getaddr(dst, base, ty, index) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let dst = self.lowerToReg(builder, dst, LLType::I64);
                         let base = self.lowerToReg(builder, base, LLType::I64);
-                        let addr = match index.kind {
-                            IRValueKind::Reg(_) | IRValueKind::Ptr(_) => {
+                        let addr = match index {
+                            IRValue::Reg(_) | IRValue::Ptr(_) => {
                                 let index_val = self.lowerToReg(builder, index, LLType::I64);
                                 x86Value::memFull(
                                     base.getReg(),
@@ -238,8 +227,9 @@ impl Backend {
                                     llty,
                                 )
                             }
-                            IRValueKind::Imm(i) => {
-                                x86Value::memFull(base.getReg(), None, llty.bytes(), i, llty)
+                            IRValue::Arg(n) => todo!(),
+                            IRValue::Imm(i) => {
+                                x86Value::memFull(base.getReg(), None, llty.bytes(), *i, llty)
                             }
                         };
                         builder.emit(Lea(dst, addr));
@@ -252,7 +242,7 @@ impl Backend {
                         builder.emit(Jmp(epilogue));
                     }
                     IRInstr::Ret(ty, rs1) => {
-                        let llty = lowerIRType(ty);
+                        let llty = LLType::fromIRType(ty);
                         let rs1 = self.lowerToReg(builder, rs1, llty);
 
                         let rty_bits = builder.getReturnType().bits();
@@ -268,16 +258,16 @@ impl Backend {
                         builder.emit(Jmp(epilogue));
                     }
                     IRInstr::Trunc(to_ty, dst, from_ty, rs1) => {
-                        let to_llty = lowerIRType(to_ty);
+                        let to_llty = LLType::fromIRType(to_ty);
                         let dst = self.lowerToReg(builder, dst, to_llty);
                         let rs1 = self.lowerToReg(builder, rs1, to_llty);
                         builder.emit(Mov(dst, rs1));
                     }
                     IRInstr::Zext(to_ty, dst, from_ty, rs1)
                     | IRInstr::Sext(to_ty, dst, from_ty, rs1) => {
-                        let to_llty = lowerIRType(to_ty);
+                        let to_llty = LLType::fromIRType(to_ty);
                         let dst = self.lowerToReg(builder, dst, to_llty);
-                        let from_llty = lowerIRType(from_ty);
+                        let from_llty = LLType::fromIRType(from_ty);
                         let rs1 = self.lowerToReg(builder, rs1, from_llty);
                         match instr {
                             IRInstr::Zext(..) => builder.emit(Movzx(dst, rs1)),
@@ -290,6 +280,6 @@ impl Backend {
             false
         });
 
-        new_function
+        self.builder = Some(new_function);
     }
 }

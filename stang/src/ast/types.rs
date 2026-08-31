@@ -1,6 +1,5 @@
 use std::hash::Hash;
 
-use crate::die;
 use registry::*;
 use stir::isa::IRType;
 
@@ -23,8 +22,14 @@ pub enum Type {
     Void,
 
     // Rest
-    Base(&'static str),
-    Function { args: Vec<TypeId>, returns: TypeId },
+    Base {
+        name: &'static str,
+        fields: Vec<(&'static str, TypeId)>,
+    },
+    Function {
+        args: Vec<TypeId>,
+        returns: TypeId,
+    },
     Pointer(TypeId),
 }
 
@@ -63,19 +68,19 @@ impl Type {
     }
 
     pub fn is_pointer(&self) -> bool {
-        matches!(self, Type::Pointer(..))
+        matches!(self, Type::Pointer(..) | Type::Base { .. })
     }
 
     pub fn get_pointee(&self) -> TypeId {
         match self {
             Type::Pointer(p) => *p,
-            _ => die!("Not a pointer type: {self}"),
+            _ => panic!("Not a pointer type: {self}"),
         }
     }
 
     pub fn alignment(&self) -> usize {
         match self {
-            Type::Base(_) => todo!(),
+            Type::Base { .. } => todo!(),
             // Function types are coerced to pointers
             x => x.bits(),
         }
@@ -91,7 +96,7 @@ impl Type {
             Type::Void => 0,
             Type::Function { .. } => 64,
             Type::Pointer(_) => 64,
-            Type::Base(_) => todo!(),
+            Type::Base { .. } => todo!(),
             Self::Unresolved(..) => panic!(),
         }
     }
@@ -108,7 +113,8 @@ impl Type {
             Type::I64 | Type::U64 => IRType::I64,
             Type::Bool => IRType::I8,
             Type::Pointer(id) => IRType::Ptr,
-            Type::Base(..) | Type::Function { .. } => todo!(),
+            Type::Base { .. } => IRType::Ptr,
+            Type::Function { .. } => todo!(),
             _ => panic!("Can't lower {self:?} type"),
         }
     }
@@ -117,7 +123,7 @@ impl Type {
 impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            Type::Base(s) => format_args!("{}", *s),
+            Type::Base { name, .. } => format_args!("{}", *name),
             Type::Function { args, returns } => {
                 format_args!(
                     "Fn({}) -> {}",

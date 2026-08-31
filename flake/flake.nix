@@ -10,6 +10,8 @@
         packages = with pkgs; [
           nasm
         ];
+
+        RUST_BACKTRACE=1;
       };
     };
 

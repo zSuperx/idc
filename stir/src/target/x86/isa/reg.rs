@@ -1,4 +1,4 @@
-use crate::targets::x86::isa::{types::LLType, val::x86Value};
+use crate::target::x86::isa::{types::LLType, value::x86Value};
 
 #[derive(Clone, Debug, Copy, PartialEq, Eq)]
 pub enum Reg {

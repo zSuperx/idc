@@ -11,6 +11,7 @@ use std::{
 ///
 /// However, it's not all bad! The best part is that the returned `Id`s implement the `Copy` trait
 /// :)
+#[derive(Debug)]
 pub struct Registry<K> {
     map: HashMap<K, usize>,
     vec: Vec<K>,

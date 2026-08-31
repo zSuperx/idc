@@ -11,7 +11,7 @@ pub enum HirObj {
     },
     Struct {
         name: Spanned<&'static str>,
-        fields: Vec<(Spanned<&'static str>, TypeId)>,
+        fields: Vec<(Spanned<&'static str>, Spanned<TypeId>)>,
     },
 }
 

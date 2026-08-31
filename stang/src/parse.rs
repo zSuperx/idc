@@ -1,6 +1,6 @@
 use crate::IRs::hir::*;
 use crate::ast::*;
-use crate::state::{GlobalState, SOURCE, add_type, add_str, source};
+use crate::state::{GlobalState, SOURCE, add_str, add_type, source};
 
 use crate::die;
 
@@ -32,21 +32,33 @@ impl GlobalState {
     }
 
     fn parse_struct(&mut self) -> Spanned<HirObj> {
-        todo!()
+        let span_start = self.mark();
+        self.expect(Token::Struct);
+        let name = self.expect_ident();
+        self.expect(Token::LCurly);
+        let mut fields = vec![];
+        while !self.is_next(Token::RCurly) {
+            let span_start = self.mark();
+            let field_name = self.expect_ident();
+            self.expect(Token::Colon);
+            let field_ty = self.parse_type();
+            self.expect(Token::Semi);
+            fields.push((field_name, field_ty));
+        }
+        self.expect(Token::RCurly);
+        let inner = HirObj::Struct { name, fields };
+        self.commit(inner, span_start)
     }
 
     fn parse_global(&mut self) -> Spanned<HirObj> {
         let span_start = self.mark();
         self.expect(Token::Global);
-        let name = {
-            let span_start = self.mark();
-            let raw = self.expect_ident();
-            self.commit(raw, span_start)
-        };
+        let name = self.expect_ident();
         self.expect(Token::Colon);
         let ty = self.parse_type();
         self.expect(Token::Eq);
         let rhs = self.parse_expr();
+        self.expect(Token::Semi);
         let global = HirObj::Global {
             name,
             ty,
@@ -58,11 +70,7 @@ impl GlobalState {
     fn parse_func(&mut self) -> Spanned<HirObj> {
         let span_start = self.mark();
         self.expect(Token::Fn);
-        let name = {
-            let span_start = self.mark();
-            let name = self.expect_ident();
-            self.commit(name, span_start)
-        };
+        let name = self.expect_ident();
 
         self.expect(Token::LParen);
         let mut args = vec![];
@@ -73,11 +81,7 @@ impl GlobalState {
                     break;
                 }
             }
-            let argname = {
-                let span_start = self.mark();
-                let inner = self.expect_ident();
-                self.commit(inner, span_start)
-            };
+            let argname = self.expect_ident();
             self.expect(Token::Colon);
             let ty = self.parse_type();
             args.push((argname, ty));
@@ -118,7 +122,7 @@ impl GlobalState {
                 self.expect(Token::Star);
                 Type::Pointer(self.parse_type().inner)
             }
-            _ => Type::Unresolved(self.expect_ident()),
+            _ => Type::Unresolved(self.expect_ident().inner),
         };
 
         let id = add_type(ty);
@@ -133,8 +137,7 @@ impl GlobalState {
             Token::Let => {
                 self.eat();
                 let lhs_start = self.mark();
-                let varname = self.expect_ident();
-                let lhs = self.commit(varname, lhs_start);
+                let lhs = self.expect_ident();
                 let ty = self.is_next(Token::Colon).then(|| {
                     self.expect(Token::Colon);
                     self.parse_type()
@@ -314,6 +317,13 @@ impl GlobalState {
                     index: Box::new(idx),
                 }
             }
+            Token::Dot => {
+                let field_name = self.expect_ident();
+                HirExpr::Field {
+                    base: Box::new(lhs),
+                    field: field_name.inner,
+                }
+            }
             Token::LParen => {
                 let mut args = vec![];
                 while !self.is_next(Token::RParen) {
@@ -351,7 +361,12 @@ impl GlobalState {
                     rhs: Box::new(rhs),
                 }
             }
-            rel @ (Token::EqEq | Token::BangEq | Token::LtEq | Token::Lt | Token::GtEq | Token::Gt) => {
+            rel @ (Token::EqEq
+            | Token::BangEq
+            | Token::LtEq
+            | Token::Lt
+            | Token::GtEq
+            | Token::Gt) => {
                 let rhs = self._parse_expr(op_power);
                 let op = match rel {
                     Token::BangEq => BinOp::Ne,
@@ -521,6 +536,7 @@ impl GlobalState {
             );
         };
 
+
         let kind = match raw {
             "let" => Token::Let,
             "fn" => Token::Fn,
@@ -686,10 +702,10 @@ impl GlobalState {
         self.peek().inner == expected
     }
 
-    pub fn expect_ident(&mut self) -> &'static str {
+    pub fn expect_ident(&mut self) -> Spanned<&'static str> {
         let next = self.eat();
         match next.inner {
-            Token::Ident(s) => s,
+            Token::Ident(s) => next.span.wrap(s),
             _ => die!("Expected identifier, found {next}"),
         }
     }

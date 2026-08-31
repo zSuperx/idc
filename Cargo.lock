@@ -384,6 +384,9 @@ dependencies = [
 [[package]]
 name = "stir"
 version = "0.1.0"
+dependencies = [
+ "registry",
+]
 
 [[package]]
 name = "strsim"
