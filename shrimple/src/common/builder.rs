@@ -17,6 +17,8 @@ pub struct StructDef {
     pub(crate) fields: Vec<IRType>,
 }
 
+pub type StructId = Id<StructDef>;
+
 #[derive(Debug, Clone)]
 pub struct FunctionBuilder<I: InstructionTrait, V, T> {
     pub(crate) name: &'static str,

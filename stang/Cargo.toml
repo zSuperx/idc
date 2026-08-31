@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 bitset = { version = "0.1.0", path = "../bitset" }
-stir = { version = "0.1.0", path = "../stir" }
+shrimple = { version = "0.1.0", path = "../shrimple" }
 clap = { version = "4.6.1", features = ["derive"] }
 derived-deref = "2.1.0"
 heuristic-graph-coloring = { path = "../heuristic-graph-coloring/" }

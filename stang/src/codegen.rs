@@ -4,9 +4,9 @@ use crate::die;
 use crate::state::{Function, LoopLabelPair, SymbolKind, add_type};
 
 use IRInstr::*;
-use stir::builder::*;
-use stir::comment;
-use stir::isa::*;
+use shrimple::builder::*;
+use shrimple::comment;
+use shrimple::isa::*;
 
 impl Function {
     /// Binds all local variables and function arguments to virtual registers.

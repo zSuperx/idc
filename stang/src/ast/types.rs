@@ -1,7 +1,7 @@
 use std::hash::Hash;
 
 use registry::*;
-use stir::isa::IRType;
+use shrimple::isa::IRType;
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 pub enum Type {

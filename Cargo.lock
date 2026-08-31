@@ -369,6 +369,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shrimple"
+version = "0.1.0"
+dependencies = [
+ "registry",
+]
+
+[[package]]
 name = "stang"
 version = "0.1.0"
 dependencies = [
@@ -377,15 +384,8 @@ dependencies = [
  "derived-deref",
  "heuristic-graph-coloring",
  "registry",
- "stir",
+ "shrimple",
  "tempfile",
-]
-
-[[package]]
-name = "stir"
-version = "0.1.0"
-dependencies = [
- "registry",
 ]
 
 [[package]]

@@ -41,7 +41,7 @@ fn main() {
     }
 
     let mut backend = match CFG.target {
-        Target::x86 => stir::x86Backend::new(),
+        Target::x86 => shrimple::x86Backend::new(),
     };
 
     match CFG.action {

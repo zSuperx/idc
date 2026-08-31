@@ -8,8 +8,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use registry::Registry;
-use stir::builder::IRBB;
-use stir::isa::IRValue;
+use shrimple::builder::IRBB;
+use shrimple::isa::IRValue;
 
 use crate::ast::*;
 

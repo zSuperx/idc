@@ -2,15 +2,7 @@ use std::fmt::Display;
 
 use registry::Id;
 
-use crate::common::builder::StructDef;
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct StructId {
-    name: &'static str,
-    size: usize,
-    alignment: usize,
-    // fields: Vec<(&'static str, IRType)>,
-}
+use crate::common::builder::StructId;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum IRType {
@@ -20,7 +12,7 @@ pub enum IRType {
     I32,
     I64,
     Ptr,
-    Struct(Id<StructDef>),
+    Struct(StructId),
 }
 
 impl Display for IRType {
