@@ -3,7 +3,7 @@ use crate::{
         basicblock::{BBID, BasicBlock},
         builder::FunctionBuilder,
     },
-    isa::IRValue,
+    stir::isa::IRValue,
     target::stir::isa::{IRInstr, IRType},
 };
 

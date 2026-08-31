@@ -68,3 +68,10 @@ pub const RBP: x86Value = x86Value::reg(Reg::BP, LLType::I64);
 pub const RSP: x86Value = x86Value::reg(Reg::SP, LLType::I64);
 pub const RAX: x86Value = x86Value::reg(Reg::A, LLType::I64);
 pub const EAX: x86Value = x86Value::reg(Reg::A, LLType::I32);
+
+pub const RDI: x86Value = x86Value::reg(Reg::DI, LLType::I64);
+pub const RSI: x86Value = x86Value::reg(Reg::SI, LLType::I64);
+pub const RDX: x86Value = x86Value::reg(Reg::D, LLType::I64);
+pub const RCX: x86Value = x86Value::reg(Reg::C, LLType::I64);
+pub const R8Q: x86Value = x86Value::reg(Reg::R8, LLType::I64);
+pub const R9Q: x86Value = x86Value::reg(Reg::R9, LLType::I64);

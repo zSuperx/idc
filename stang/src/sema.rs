@@ -2,7 +2,7 @@ use crate::IRs::{hir::*, tir::*};
 use crate::ast::*;
 use crate::common::*;
 use crate::state::*;
-use crate::state::{Function, SymbolInfo, SymbolKind, add_type, get_state, next_symbol};
+use crate::state::{Function, SymbolInfo, SymbolKind, add_type, global_state, next_symbol};
 
 impl Function {
     fn add_local_symbol(
@@ -30,7 +30,7 @@ impl Function {
     pub fn lookup_symbol(&mut self, symbol: Symbol) -> &SymbolInfo {
         match self.symbol_table.get(&symbol) {
             Some(i) => i,
-            None => get_state().symbol_table.get(&symbol).unwrap_or_else(|| {
+            None => global_state().symbol_table.get(&symbol).unwrap_or_else(|| {
                 die!("Symbol not found: {symbol}");
             }),
         }
@@ -39,7 +39,7 @@ impl Function {
     pub fn lookup_symbol_mut(&mut self, symbol: Symbol) -> &mut SymbolInfo {
         match self.symbol_table.get_mut(&symbol) {
             Some(i) => i,
-            None => get_state().symbol_table.get_mut(&symbol).unwrap(),
+            None => global_state().symbol_table.get_mut(&symbol).unwrap(),
         }
     }
 
@@ -53,7 +53,7 @@ impl Function {
     ) -> Self {
         let mut function = Self {
             name,
-            symbol: get_state().globals[name.inner],
+            symbol: global_state().globals[name.inner],
             return_type: resolve_type(&returns),
             env: Default::default(),
             loop_labels: Default::default(),

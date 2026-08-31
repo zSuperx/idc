@@ -4,15 +4,15 @@ use crate::die;
 use crate::state::{Function, LoopLabelPair, SymbolKind, add_type};
 
 use IRInstr::*;
-use shrimple::builder::*;
+use shrimple::stir::builder::*;
 use shrimple::comment;
-use shrimple::isa::*;
+use shrimple::stir::isa::*;
 
 impl Function {
     /// Binds all local variables and function arguments to virtual registers.
     /// Arguments are resolved first, in order, followed by locals
     ///
-    /// The order of each family of variables (args/locals) is done alphabetically so as to avoid
+    /// The order of local variables is done alphabetically so as to avoid
     /// randomness in the compiled output
     pub fn codegen_locals(&mut self, builder: &mut IRFunction) {
         let mut args = vec![];
@@ -266,6 +266,8 @@ impl Function {
                 builder.emit(Load(irty, ptr, dst));
                 dst
             }
+            // TODO: Look into the possibility of x = y = 3.
+            // Codegen functionality is already supported, just needs parsing + sema support.
             TirExprKind::Store { ptr, val } => {
                 let ptr = self.codegen_expr(builder, ptr);
                 assert!(ptr.is_mem());

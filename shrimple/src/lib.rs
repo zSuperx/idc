@@ -5,7 +5,6 @@
 pub(crate) mod common;
 pub(crate) mod target;
 
-pub use target::stir::builder;
-pub use target::stir::isa;
+pub use target::stir;
 
 pub use target::x86::Backend as x86Backend;

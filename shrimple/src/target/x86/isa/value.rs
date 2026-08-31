@@ -52,6 +52,14 @@ impl x86Value {
         x86Value::Reg { name, ty }
     }
 
+    pub fn is_mem(&self) -> bool {
+        matches!(self, x86Value::Mem { .. })
+    }
+
+    pub fn is_reg(&self) -> bool {
+        matches!(self, x86Value::Reg { .. })
+    }
+
     pub const fn mem(base: Reg, ty: LLType) -> x86Value {
         x86Value::Mem {
             base,

@@ -14,7 +14,6 @@ mod ast;
 mod codegen;
 mod sema;
 mod state;
-// mod optimize;
 mod IRs;
 mod common;
 mod parse;
@@ -23,7 +22,7 @@ mod validate;
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);
 
 fn main() {
-    let parsed_objects = get_state().parse_file(&CFG.input);
+    let parsed_objects = global_state().parse_file(&CFG.input);
 
     resolve_top_level(&parsed_objects);
 
@@ -35,8 +34,7 @@ fn main() {
                 functions.push(function.codegen_func());
             }
             HirObj::Global { name, ty, rhs } => todo!("deal with global"),
-            HirObj::Struct { name, fields } => {
-            }
+            HirObj::Struct { name, fields } => {}
         }
     }
 
@@ -53,7 +51,7 @@ fn main() {
             println!()
         }
         Action::EmitAsm => {
-            for function in functions.iter() {
+            for mut function in functions.iter_mut() {
                 backend.lower(function).print(CFG.verbose);
                 println!();
             }

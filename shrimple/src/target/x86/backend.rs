@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::builder::IRFunction;
+use crate::stir::builder::IRFunction;
 ///
 /// Lowers from STIR to x86 MIR
 ///
@@ -20,7 +20,12 @@ pub struct Backend {
 }
 
 impl Backend {
-    pub fn lower(&mut self, stir_function: &IRFunction) -> x86Function {
+    /// Driver function to lower STIR code to x86 assembly
+    pub fn lower(&mut self, stir_function: &mut IRFunction) -> x86Function {
+
+        // Handle ABI impl
+        self.resolve_args(stir_function);
+
         // This creates the builder
         self.translate(stir_function);
 

@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use registry::{Id, Registry};
 
-use crate::isa::IRType;
+use crate::stir::isa::IRType;
 
 use super::basicblock::{BBID, BasicBlock};
 use super::traits::InstructionTrait;
@@ -162,7 +162,7 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
     }
 
     /// Performs a visitor pass that verifies no reachable block in the function lacks a terminator.
-    /// 
+    ///
     /// Upon finding an invalid block, the verifier either breaks with `false`, OR if a
     /// `default_return` instruction is provided, will set the block's terminator to that.
     pub fn verify(&mut self, default_return: Option<I>) -> bool {

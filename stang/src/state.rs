@@ -8,8 +8,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use registry::Registry;
-use shrimple::builder::IRBB;
-use shrimple::isa::IRValue;
+use shrimple::stir::builder::IRBB;
+use shrimple::stir::isa::IRValue;
 
 use crate::ast::*;
 
@@ -62,16 +62,16 @@ pub fn add_str(value: &str) -> &'static str {
     }
 }
 
-pub fn get_state() -> &'static mut GlobalState {
+pub fn global_state() -> &'static mut GlobalState {
     unsafe { &mut GLOBAL_STATE }
 }
 
 pub fn add_type(ty: Type) -> TypeId {
-    get_state().types.borrow_mut().add(ty)
+    global_state().types.borrow_mut().add(ty)
 }
 
 pub fn next_symbol(name: &str) -> Symbol {
-    let state = get_state();
+    let state = global_state();
     let id = state.symbol_counter;
     state.symbol_counter += 1;
     state.symbols.borrow_mut().add(format!("{name}.{id}"))
@@ -169,7 +169,7 @@ pub fn resolve_top_level(objects: &Vec<Spanned<HirObj>>) {
 pub fn resolve_type(s @ Spanned { inner: ty, span }: &Spanned<TypeId>) -> TypeId {
     match ty.lookup() {
         Type::Unresolved(name) => {
-            let Some(id) = get_state().type_names.get(name) else {
+            let Some(id) = global_state().type_names.get(name) else {
                 die!("Unknown type {s}")
             };
             *id
@@ -200,7 +200,7 @@ fn resolve_global_types(Spanned { inner: obj, span }: &Spanned<HirObj>) {
                     .map(|(n, t)| (n.inner, resolve_type(t)))
                     .collect(),
             });
-            get_state().type_names.insert(name.inner, s);
+            global_state().type_names.insert(name.inner, s);
         }
     }
 }
@@ -225,8 +225,8 @@ fn resolve_global_names(Spanned { inner: obj, span }: &Spanned<HirObj>) {
             };
             let ty = add_type(function_ty);
             let symbol = next_symbol(name.inner);
-            get_state().globals.insert(name.inner, symbol);
-            get_state().symbol_table.insert(
+            global_state().globals.insert(name.inner, symbol);
+            global_state().symbol_table.insert(
                 symbol,
                 SymbolInfo {
                     symbol,

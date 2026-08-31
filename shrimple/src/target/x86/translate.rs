@@ -1,16 +1,29 @@
-use std::collections::HashMap;
-
-use crate::builder::IRFunction;
 ///
 /// Lowers from STIR to x86 MIR
 ///
 use crate::comment;
 use crate::common::builder::*;
+use crate::stir::builder::IRFunction;
 use crate::target::stir::isa::*;
 use crate::target::x86::Backend;
 use crate::target::x86::builder::x86Function;
 use crate::target::x86::isa::*;
+use std::collections::HashMap;
+
+// Bring all x86 instructions into current namespace for convenience
 use x86Instr::*;
+
+/// Bumps `val` up to the next largest multiple of `n`
+fn align_up_n(val: i128, n: i128) -> i128 {
+    let rem = val % n;
+    if rem > 0 { val + (n - rem) } else { val }
+}
+
+/// Brings `val` down to the next smallest multiple of `n`
+fn align_down_n(val: i128, n: i128) -> i128 {
+    let rem = val % n;
+    val + rem
+}
 
 impl Backend {
     pub fn new() -> Self {
@@ -23,8 +36,14 @@ impl Backend {
         value: &IRValue,
         ty: &IRType,
     ) -> x86Value {
+        // TODO: Align each alloca based on its alignment
+        // it's so wrong right now but i need to sleep
         let ty = LLType::fromIRType(ty);
         self.v_rsp -= ty.bytes() as i128;
+        let old_v_rsp = self.v_rsp;
+        self.v_rsp = align_down_n(self.v_rsp, ty.bytes() as i128);
+        comment!(builder, "Virtual RSP aligned from {old_v_rsp} -> {}", self.v_rsp);
+
         builder.emit(Sub(RSP, x86Value::Imm(ty.bytes() as i128)));
         let slot = x86Value::memDisp(Reg::BP, self.v_rsp, ty);
         self.v2p.insert(*value, slot);
@@ -44,10 +63,23 @@ impl Backend {
                 builder.emit(Mov(reg, x86Value::Imm(*i)));
                 reg
             }
-            IRValue::Reg(r) => x86Value::reg(Reg::Virt(*r), ty),
+            IRValue::Reg(r) => {
+                if let Some(s) = self.v2p.get(value) {
+                    if s.is_reg() {
+                        *s
+                    } else {
+                        assert!(s.is_mem(), "VReg mapped to immediate");
+                        let reg = x86Value::reg(Reg::Virt(builder.nextReg()), ty);
+                        builder.emit(Mov(reg, *s));
+                        reg
+                    }
+                } else {
+                    x86Value::reg(Reg::Virt(*r), ty)
+                }
+            }
             IRValue::Ptr(r) => {
                 if let Some(s) = self.v2p.get(value) {
-                    assert!(matches!(s, x86Value::Mem { .. }));
+                    assert!(s.is_mem());
                     // If this pointer is mapped to a physical address (i.e. [rbp - 8])
                     // we need to emit a lea instruction
                     let reg = x86Value::reg(Reg::Virt(builder.nextReg()), LLType::I64);
