@@ -118,8 +118,8 @@ but the upper 32 bits. So traverse the function and replace:
     - `%dst = trunc i64 %tmp to i32`
 
 As we do this, we add the following mappings to `v2p`:
-    - `%6 -> rdi`
-    - `%7 -> rsi`
+- `%6 -> rdi`
+- `%7 -> rsi`
 
 > [!NOTE]
 > Since we're deleting the %1 and %3 (and maybe more) `def`s, assert there are
