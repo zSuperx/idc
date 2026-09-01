@@ -1,4 +1,5 @@
 mod translate;
+mod legalize;
 mod backend;
 pub use backend::Backend;
 mod isa;

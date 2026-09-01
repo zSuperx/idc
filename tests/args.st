@@ -1,3 +1,11 @@
-fn test_args(arg1: i8, arg2: i16, arg3: u64) -> i32 {
-  return @(i32)arg1;
+fn test_args(
+  a1: i32, 
+  a2: i32, 
+  a3: i32, 
+  a4: i32, 
+  a5: i32, 
+  a6: i32, 
+  a7: i32, 
+) -> i32 {
+  return a6 + a7;
 }

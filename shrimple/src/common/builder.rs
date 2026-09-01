@@ -1,6 +1,7 @@
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 use std::collections::{HashMap, HashSet};
 use std::marker::PhantomData;
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use registry::{Id, Registry};
@@ -89,84 +90,13 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
         self.reg_count = new;
     }
 
-    /// Perform a DFS visitor pass through the function
-    ///
-    /// `visitor`: a function that accepts both the current block and its `id` and returns whether
-    /// the DFS should end early.
-    ///
-    /// the `dfs()` function itself will return whether or not DFS ended early. That is, it will
-    /// mimic `visitor`'s return value
-    pub fn dfs<F>(&self, mut visitor: F) -> bool
-    where
-        F: FnMut(BBID<I>, &BasicBlock<I>) -> bool,
-    {
-        let mut seen = HashSet::new();
-        let mut stack = vec![self.entrypoint];
-        while let Some(id) = stack.pop() {
-            seen.insert(id);
-            let block = self.blocks.get(&id).unwrap();
-
-            if visitor(id, block) {
-                return true;
-            }
-
-            for succ in block.successors.iter() {
-                if !seen.contains(succ) && Some(*succ) != block.fallthrough {
-                    stack.push(*succ);
-                }
-            }
-
-            if let Some(ft) = block.fallthrough {
-                if !seen.contains(&ft) {
-                    stack.push(ft);
-                }
-            }
-        }
-        false
-    }
-
-    /// Perform a DFS mutable visitor pass through the function
-    ///
-    /// `visitor`: a function that accepts both the current block and its `id` and returns whether
-    /// the DFS should end early.
-    ///
-    /// the `dfs()` function itself will return whether or not DFS ended early. That is, it will
-    /// mimic `visitor`'s return value
-    pub fn dfs_mut<F>(&mut self, mut visitor: F) -> bool
-    where
-        F: FnMut(BBID<I>, &mut BasicBlock<I>) -> bool,
-    {
-        let mut seen = HashSet::new();
-        let mut stack = vec![self.entrypoint];
-        while let Some(id) = stack.pop() {
-            seen.insert(id);
-            let block = self.blocks.get_mut(&id).unwrap();
-
-            if visitor(id, block) {
-                return true;
-            }
-
-            for succ in block.successors.iter() {
-                if !seen.contains(succ) && Some(*succ) != block.fallthrough {
-                    stack.push(*succ);
-                }
-            }
-
-            if let Some(ft) = block.fallthrough {
-                if !seen.contains(&ft) {
-                    stack.push(ft);
-                }
-            }
-        }
-        false
-    }
-
     /// Performs a visitor pass that verifies no reachable block in the function lacks a terminator.
     ///
     /// Upon finding an invalid block, the verifier either breaks with `false`, OR if a
     /// `default_return` instruction is provided, will set the block's terminator to that.
     pub fn verify(&mut self, default_return: Option<I>) -> bool {
-        !self.dfs_mut(|_id, block| {
+        !self.dfs_short_circuit(|builder, curr_id| {
+            let block = builder.blocks.get_mut(&curr_id).unwrap();
             if block.terminator.is_none() {
                 match default_return.as_ref() {
                     Some(i) => block.terminator = Some(i.clone()),
@@ -294,5 +224,114 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
         let ret = self.reg_count;
         self.reg_count += 1;
         ret
+    }
+
+    pub fn create_dfs<'a>(&'a mut self) -> FunctionDfs<'a, I, V, T> {
+        FunctionDfs {
+            stack: vec![self.entrypoint],
+            seen: Default::default(),
+            builder: self,
+        }
+    }
+
+    pub fn dfs_short_circuit(
+        &mut self,
+        mut visitor: impl FnMut(&mut Self, BBID<I>) -> bool,
+    ) -> bool {
+        let mut stack = vec![self.entrypoint];
+        let mut seen = HashSet::new();
+
+        while let Some(id) = stack.pop() {
+            seen.insert(id);
+
+            if visitor(self, id) {
+                return true;
+            }
+
+            let block = self.blocks.get(&id).unwrap();
+            for succ in block.successors.iter() {
+                if !seen.contains(succ) && Some(*succ) != block.fallthrough {
+                    stack.push(*succ);
+                }
+            }
+
+            if let Some(ft) = block.fallthrough {
+                if !seen.contains(&ft) {
+                    stack.push(ft);
+                }
+            }
+        }
+        false
+    }
+
+    pub fn dfs(&mut self, mut visitor: impl FnMut(&mut Self, BBID<I>)) {
+        let mut stack = vec![self.entrypoint];
+        let mut seen = HashSet::new();
+
+        while let Some(id) = stack.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+
+            visitor(self, id);
+
+            let block = self.blocks.get(&id).unwrap();
+            for succ in block.successors.iter() {
+                if !seen.contains(succ) {
+                    stack.push(*succ);
+                }
+            }
+
+            // Push the fallthrough block last to ensure its popped off next
+            if let Some(ft) = block.fallthrough {
+                if !seen.contains(&ft) {
+                    stack.push(ft);
+                }
+            }
+        }
+    }
+}
+
+pub struct FunctionDfs<'a, I: InstructionTrait, V, T> {
+    builder: &'a mut FunctionBuilder<I, V, T>,
+    stack: Vec<BBID<I>>,
+    seen: HashSet<BBID<I>>,
+}
+
+impl<'a, I: InstructionTrait, V, T> DerefMut for FunctionDfs<'a, I, V, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.builder
+    }
+}
+
+impl<'a, I: InstructionTrait, V, T> Deref for FunctionDfs<'a, I, V, T> {
+    type Target = FunctionBuilder<I, V, T>;
+
+    fn deref(&self) -> &Self::Target {
+        self.builder
+    }
+}
+
+impl<'a, I: InstructionTrait, V, T> FunctionDfs<'a, I, V, T> {
+    pub fn next(&mut self) -> Option<BBID<I>> {
+        let Some(id) = self.stack.pop() else {
+            return None;
+        };
+        self.seen.insert(id);
+
+        let block = self.builder.blocks.get_mut(&id).unwrap();
+        for succ in block.successors.iter() {
+            if !self.seen.contains(succ) && Some(*succ) != block.fallthrough {
+                self.stack.push(*succ);
+            }
+        }
+
+        if let Some(ft) = block.fallthrough {
+            if !self.seen.contains(&ft) {
+                self.stack.push(ft);
+            }
+        }
+
+        Some(id)
     }
 }

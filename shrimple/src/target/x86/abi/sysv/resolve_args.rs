@@ -11,14 +11,16 @@ impl Backend {
         let mut used_stack_bytes = 0;
         let mut curr_reg = registers.next();
         // let mut new_args = vec![];
-        for (arg_val, arg_ty) in stir_function.args.iter() {
+        for (i, (arg_val, arg_ty)) in stir_function.args.iter().enumerate() {
             if let IRType::Struct(struct_id) = arg_ty {
                 todo!("System V ABI: Handle structs")
             } else {
+                // Primitive type arguments each consume a single eightbyte register
+                // If no registers are left, the argument shall live at [rbp + ...]
                 let llty = LLType::fromIRType(arg_ty);
                 let dst = match curr_reg {
                     Some(r) => x86Value::reg(*r, llty),
-                    None => x86Value::memDisp(Reg::BP, used_stack_bytes + 8, llty),
+                    None => x86Value::memDisp(Reg::BP, 16 + (8 * i.saturating_sub(6) as i128), llty),
                 };
                 self.v2p.insert(*arg_val, dst);
                 curr_reg = registers.next();

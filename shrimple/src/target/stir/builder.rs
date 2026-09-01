@@ -12,7 +12,7 @@ pub type IRBasicBlock = BasicBlock<IRInstr>;
 pub type IRFunction = FunctionBuilder<IRInstr, IRValue, IRType>;
 
 impl IRFunction {
-    pub fn print(&self, include_comments: bool) {
+    pub fn print(&mut self, include_comments: bool) {
         println!(
             "{}({}):",
             self.name,
@@ -22,8 +22,9 @@ impl IRFunction {
                 .collect::<Vec<String>>()
                 .join(", ")
         );
-        self.dfs(|id, block| {
-            println!("{id}:");
+        self.dfs(|mcf, curr_id| {
+            println!("{curr_id}:");
+            let block = &mcf.blocks[&curr_id];
             for i in block.instructions.iter() {
                 if matches!(i, IRInstr::Comment(..)) && !include_comments {
                     continue;
@@ -35,7 +36,6 @@ impl IRFunction {
             } else {
                 println!("\t; !! (missing terminator)");
             }
-            false
         });
     }
 }

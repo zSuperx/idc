@@ -4,8 +4,8 @@ use crate::die;
 use crate::state::{Function, LoopLabelPair, SymbolKind, add_type};
 
 use IRInstr::*;
-use shrimple::stir::builder::*;
 use shrimple::comment;
+use shrimple::stir::builder::*;
 use shrimple::stir::isa::*;
 
 impl Function {
@@ -63,10 +63,7 @@ impl Function {
         // Sort locals by their local variable name
         locals.sort_by_key(|s| {
             let info = self.symbol_table.get(s).unwrap();
-            let SymbolKind::Arg(i) = info.kind else {
-                unreachable!()
-            };
-            i
+            info.raw_name.inner
         });
 
         // Local variables are alloca'd but not initialized to anything

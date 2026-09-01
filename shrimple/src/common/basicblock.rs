@@ -75,4 +75,31 @@ impl<I: InstructionTrait> BasicBlock<I> {
             terminator: Default::default(),
         }
     }
+
+    pub fn rewrite_instructions(&mut self, mut rewriter: impl FnMut(&I) -> RewriteAction<I>) {
+        let old = std::mem::take(&mut self.instructions);
+        for i in old {
+            match rewriter(&i) {
+                RewriteAction::Skip => continue,
+                RewriteAction::Keep => self.instructions.push(i),
+                RewriteAction::Replace(items) => self.instructions.extend(items),
+                RewriteAction::InsertBefore(items) => {
+                    self.instructions.extend(items);
+                    self.instructions.push(i);
+                }
+                RewriteAction::InsertAfter(items) => {
+                    self.instructions.push(i);
+                    self.instructions.extend(items);
+                }
+            }
+        }
+    }
+}
+
+pub enum RewriteAction<I: InstructionTrait> {
+    Skip,
+    Keep,
+    Replace(Vec<I>),
+    InsertBefore(Vec<I>),
+    InsertAfter(Vec<I>),
 }

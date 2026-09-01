@@ -10,13 +10,13 @@ use clap::{Parser, ValueEnum};
 
 use crate::{IRs::hir::HirObj, state::*};
 
+mod IRs;
 mod ast;
 mod codegen;
-mod sema;
-mod state;
-mod IRs;
 mod common;
 mod parse;
+mod sema;
+mod state;
 mod validate;
 
 pub static CFG: LazyLock<Config> = LazyLock::new(validate_config);
@@ -44,7 +44,7 @@ fn main() {
 
     match CFG.action {
         Action::EmitIr => {
-            for function in functions.iter() {
+            for function in functions.iter_mut() {
                 function.print(CFG.verbose);
                 println!();
             }
