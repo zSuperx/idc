@@ -23,7 +23,7 @@ impl Backend {
             let mut curr = mcf.blocks.remove(&curr_id).unwrap();
             curr.rewrite_instructions(|instr| match instr {
                 Mov(mem1, mem2) if mem1.is_mem() && mem2.is_mem() => {
-                    let tmp = x86Value::reg(Reg::Virt(mcf.nextReg()), mem1.ty());
+                    let tmp = x86Value::reg(mcf.nextReg(), mem1.ty());
                     RewriteAction::Replace(vec![Mov(tmp, *mem2), Mov(*mem1, tmp)])
                 }
                 _ => RewriteAction::Keep,

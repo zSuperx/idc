@@ -220,12 +220,6 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
         self.blocks[&this].terminator.is_some()
     }
 
-    pub fn nextReg(&mut self) -> usize {
-        let ret = self.reg_count;
-        self.reg_count += 1;
-        ret
-    }
-
     pub fn create_dfs<'a>(&'a mut self) -> FunctionDfs<'a, I, V, T> {
         FunctionDfs {
             stack: vec![self.entrypoint],

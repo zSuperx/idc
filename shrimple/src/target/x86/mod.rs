@@ -6,3 +6,4 @@ mod isa;
 mod builder;
 mod opts;
 mod abi;
+mod analysis;

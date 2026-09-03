@@ -23,9 +23,8 @@ impl Backend {
                     && target_id != curr_id
                 {
                     let target = mcf.blocks.get(&target_id).unwrap();
-                    if target.predecessors.len() > 1 {
+                    if target.predecessors.len() != 1 {
                         // If the target is the successor of multiple blocks, we can't merge
-                        println!("{target_id} has more than 1 predecessor");
                         break;
                     }
 
@@ -35,7 +34,7 @@ impl Backend {
                     // curr inherits the rest of target's instructions, successors, fallthrough, and terminator
                     let curr = mcf.blocks.get_mut(&curr_id).unwrap();
                     curr.successors = target.successors;
-                    curr.instructions.push(Comment(format!("BB: {target_id}")));
+                    curr.instructions.push(Comment(format!("\r; BB: {target_id}")));
                     curr.instructions.append(&mut target.instructions);
                     curr.terminator = target.terminator;
                     curr.fallthrough = target.fallthrough;

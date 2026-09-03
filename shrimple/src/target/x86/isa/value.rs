@@ -34,7 +34,9 @@ impl Display for RFLAG {
 pub enum x86Value {
     Imm(i128),
     Reg {
+        /// The register name this value is bound to
         name: Reg,
+        /// The low-level type this register holds
         ty: LLType,
     },
     Mem {
@@ -42,6 +44,7 @@ pub enum x86Value {
         index: Option<Reg>,
         scale: usize,
         disp: i128,
+        /// The low-level type this pointer points to
         ty: LLType,
     },
     CC(RFLAG),

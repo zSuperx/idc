@@ -63,7 +63,7 @@ impl Backend {
                 // else if its a register or pointer we chilling, just treat it as that
             }
             IRValue::Imm(i) => {
-                let reg = x86Value::reg(Reg::Virt(builder.nextReg()), ty);
+                let reg = x86Value::reg(builder.nextReg(), ty);
                 builder.emit(Mov(reg, x86Value::Imm(*i)));
                 reg
             }
@@ -83,7 +83,7 @@ impl Backend {
                     assert!(s.is_mem());
                     // If this pointer is mapped to a physical address (i.e. [rbp - 8])
                     // we need to emit a lea instruction
-                    let reg = x86Value::reg(Reg::Virt(builder.nextReg()), LLType::I64);
+                    let reg = x86Value::reg(builder.nextReg(), LLType::I64);
                     builder.emit(Lea(reg, *s));
                     return reg;
                 } else {

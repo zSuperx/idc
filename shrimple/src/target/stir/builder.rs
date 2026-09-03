@@ -3,7 +3,7 @@ use crate::{
         basicblock::{BBID, BasicBlock},
         builder::FunctionBuilder,
     },
-    stir::isa::IRValue,
+    stir::isa::{IRValue, VReg},
     target::stir::isa::{IRInstr, IRType},
 };
 
@@ -12,6 +12,12 @@ pub type IRBasicBlock = BasicBlock<IRInstr>;
 pub type IRFunction = FunctionBuilder<IRInstr, IRValue, IRType>;
 
 impl IRFunction {
+    pub fn nextReg(&mut self) -> VReg {
+        let ret = self.reg_count;
+        self.reg_count += 1;
+        ret
+    }
+
     pub fn print(&mut self, include_comments: bool) {
         println!(
             "{}({}):",
