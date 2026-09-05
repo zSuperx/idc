@@ -56,12 +56,6 @@ impl Backend {
 
     fn lowerToReg(&self, builder: &mut x86Function, value: &IRValue, ty: LLType) -> x86Value {
         match value {
-            IRValue::Arg(n) => {
-                let arg = &builder.args[*n];
-                // if the n'th argument is a struct, we can't turn it into a register
-                panic!("Cannot lower aggregate value {value} to a single register");
-                // else if its a register or pointer we chilling, just treat it as that
-            }
             IRValue::Imm(i) => {
                 let reg = x86Value::reg(builder.nextReg(), ty);
                 builder.emit(Mov(reg, x86Value::Imm(*i)));
@@ -267,7 +261,6 @@ impl Backend {
                                     llty,
                                 )
                             }
-                            IRValue::Arg(n) => todo!(),
                             IRValue::Imm(i) => {
                                 x86Value::memFull(base.getReg(), None, llty.bytes(), *i, llty)
                             }

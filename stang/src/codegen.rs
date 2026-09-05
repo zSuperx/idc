@@ -243,8 +243,8 @@ impl Function {
                 if matches!(info.ty.lookup(), Type::Base { .. }) {
                     ptr
                 } else {
-                    let val = IRValue::from_type(builder.nextReg(), irty);
-                    comment!(builder, "Loading {symbol}");
+                    let val = IRValue::typed(builder.nextReg(), irty);
+                    comment!(builder, "Loading {symbol} into {val}");
                     builder.emit(Load(irty, ptr, val));
                     val
                 }
@@ -259,7 +259,7 @@ impl Function {
                 let ptr = self.codegen_expr(builder, inner);
                 assert!(ptr.is_mem());
                 let irty = inner.ty.get_pointee().toIRType();
-                let dst = IRValue::from_type(builder.nextReg(), irty);
+                let dst = IRValue::typed(builder.nextReg(), irty);
                 builder.emit(Load(irty, ptr, dst));
                 dst
             }
@@ -280,7 +280,7 @@ impl Function {
                 let rhs_val = self.codegen_expr(builder, rhs);
                 match op {
                     BinOp::Add => {
-                        let result = IRValue::from_type(builder.nextReg(), irty);
+                        let result = IRValue::typed(builder.nextReg(), irty);
                         builder.emit(Add(irty, result, lhs_val, rhs_val));
                         result
                     }
@@ -290,7 +290,7 @@ impl Function {
                         result
                     }
                     BinOp::PtrAdd => {
-                        let dst = IRValue::from_type(builder.nextReg(), irty);
+                        let dst = IRValue::typed(builder.nextReg(), irty);
                         if lhs.ty.is_pointer() {
                             let base_ty = lhs.ty.get_pointee().toIRType();
                             builder.emit(Getaddr(dst, lhs_val, base_ty, rhs_val));
@@ -371,7 +371,7 @@ impl Function {
                 let from_ty = inner.ty.toIRType();
                 let to_ty = expr.ty.toIRType();
                 comment!(builder, "Casting to {to_ty}");
-                let dst = IRValue::from_type(builder.nextReg(), to_ty);
+                let dst = IRValue::typed(builder.nextReg(), to_ty);
                 if target_ty.bits() < inner.ty.bits() {
                     builder.emit(Trunc(to_ty, dst, from_ty, rhs_val))
                 } else if target_ty.bits() > inner.ty.bits() {

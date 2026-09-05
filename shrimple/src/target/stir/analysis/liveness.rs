@@ -1,0 +1,73 @@
+use std::collections::{BTreeMap};
+
+use bitset::BitSet;
+
+use crate::{
+    common::traits::InstructionTrait,
+    stir::builder::{IRBB, IRFunction},
+};
+
+impl IRFunction {
+    /// Should return a ???
+    pub(crate) fn liveness_analysis(&mut self) {
+        let mut exitpoints = self.find_leaf_blocks();
+        let mut worklist = vec![];
+
+        let mut LIVE_IN = BTreeMap::<IRBB, BitSet>::new();
+        let mut LIVE_OUT = BTreeMap::<IRBB, BitSet>::new();
+
+        // Insert empty sets for every reachable block
+        self.dfs(|self_, curr_id| {
+            worklist.push(curr_id);
+            LIVE_IN.insert(curr_id, Default::default());
+            LIVE_OUT.insert(curr_id, Default::default());
+        });
+
+        while let Some(curr_id) = worklist.pop() {
+            let curr = self.blocks.get_mut(&curr_id).unwrap();
+
+            // LIVE_IN[s] = GEN[s] U (LIVE_OUT[s] - KILL[s])
+            let mut live_in = LIVE_OUT[&curr_id].clone();
+            for i in curr.instructions.iter().rev() {
+                // Iterate through all defs of an instruction
+                // If we find a def, it is not LIVE_IN
+                for d in i.defs() {
+                    for reg in d.getReg() {
+                        live_in.remove(reg);
+                    }
+                }
+
+                // Iterate through all uses of an instruction
+                for u in i.uses() {
+                    for reg in u.getReg() {
+                        live_in.insert(reg);
+                    }
+                }
+            }
+
+            // LIVE_OUT[s] = U LIVE_IN[succ] forall succ of s
+            for succ_id in curr.successors.iter() {
+                LIVE_OUT
+                    .get_mut(&curr_id)
+                    .unwrap()
+                    .union_eq(&LIVE_IN[&succ_id]);
+            }
+
+            // If LIVE_IN[s] changed, predecessors need to be recomputed since their LIVE_OUTs
+            // derive from LIVE_IN[s]
+            let live_in_changed = live_in != LIVE_IN[&curr_id];
+            LIVE_IN.insert(curr_id, live_in);
+            if live_in_changed {
+                for pred_id in curr.predecessors.iter() {
+                    worklist.push(*pred_id);
+                }
+            }
+        }
+
+        self.dfs(|self_, curr_id| {
+            println!("{curr_id}");
+            println!("\tLIVE_IN: {}", &LIVE_IN[&curr_id]);
+            println!("\tLIVE_OUT: {}", &LIVE_OUT[&curr_id]);
+        });
+    }
+}

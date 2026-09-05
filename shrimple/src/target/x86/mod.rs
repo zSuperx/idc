@@ -1,9 +1,8 @@
 mod translate;
 mod legalize;
-mod backend;
-pub use backend::Backend;
 mod isa;
 mod builder;
+pub use builder::x86Module as Backend;
 mod opts;
 mod abi;
 mod analysis;

@@ -1,5 +1,17 @@
-use std::cell::{RefCell, RefMut};
-use std::collections::{HashMap, HashSet};
+//! This module defines the generic [`FunctionBuilder`] object
+//!
+//! A `FunctionBuilder` is generic over 3 types:
+//! 1. Instruction
+//! 2. Value
+//! 3. Type
+//!
+//! Targets should define type aliases to create target-specific `FunctionBuilder`s
+//!
+//! For example, the STIR ISA defines its `IRFunction` as follows:
+//!
+//! `pub type IRFunction = FunctionBuilder<IRInstr, IRValue, IRType>;`
+use std::cell::{RefCell};
+use std::collections::{BTreeMap, HashSet};
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
@@ -30,7 +42,7 @@ pub struct FunctionBuilder<I: InstructionTrait, V, T> {
     pub(crate) reg_count: usize,
     pub(crate) block_count: usize,
     pub(crate) structs: Rc<RefCell<Registry<StructDef>>>,
-    pub(crate) blocks: HashMap<BBID<I>, BasicBlock<I>>,
+    pub(crate) blocks: BTreeMap<BBID<I>, BasicBlock<I>>,
 }
 
 /// Given an `IRBuilder<I>` and format args, expands to `$builder.emit(Comment(format!(...)))`
@@ -52,7 +64,7 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
     /// creating it.
     pub fn new(name: &'static str, return_type: T) -> Self {
         let cursor = BBID(name, "entrypoint", 0, PhantomData::default());
-        let blocks = HashMap::from([(cursor, BasicBlock::empty())]);
+        let blocks = BTreeMap::from([(cursor, BasicBlock::empty())]);
         let block_count = 1;
         let reg_count = 0;
 

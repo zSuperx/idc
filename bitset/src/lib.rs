@@ -11,6 +11,10 @@ impl BitSet {
         Self::default()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
     /// Creates a `BitSet` from the contents of an iterator over `usize`s
     ///
     /// This does nothing fancy at the moment, it literally just runs a for loop to insert all
@@ -30,12 +34,12 @@ impl BitSet {
         Self(vec![0; (size / 128) + 1])
     }
 
-    /// Inserts an index into the set and returns whether that index was already present.
+    /// Inserts an index into the set and returns whether that index was newly inserted.
     ///
     /// If the given index is larger than the capcity of the map, the map is resized to fit it.
     ///
     /// This means that repeatedly inserting larger and larger values will result in repeated
-    /// reallocations. If the max size of the graph is known before-hand, it may be desirable to use
+    /// reallocations. If the max size of the set is known before-hand, it may be desirable to use
     /// [`BitSet::with_size`] instead, which pre-allocates the underlying `Vec`.
     pub fn insert(&mut self, index: usize) -> bool {
         let bucket = index / 128;
@@ -45,7 +49,7 @@ impl BitSet {
         }
         let ret = self.0[bucket] & (1 << subindex) != 0;
         self.0[bucket] |= 1 << subindex;
-        ret
+        !ret
     }
 
     /// Removes the given index from the set and returns whether an item was actually removed.
@@ -85,6 +89,13 @@ impl BitSet {
                 .map(|i| self.0.get(i).unwrap_or(&0) | other.0.get(i).unwrap_or(&0))
                 .collect(),
         )
+    }
+
+    /// Perform set union on `self` and `other`, modifying `self` in place
+    pub fn union_eq(&mut self, other: &Self) {
+        let max = self.0.len().max(other.0.len());
+        self.0.resize(max, 0);
+        (0..max).for_each(|i| self.0[i] |= other.0.get(i).unwrap_or(&0));
     }
 
     /// Perform set difference on `self` and `other`, producing a new `BitSet`.
@@ -140,6 +151,18 @@ impl std::ops::BitOr for BitSet {
     }
 }
 
+impl std::ops::BitOrAssign for BitSet {
+    fn bitor_assign(&mut self, rhs: Self) {
+        *self = self.union(&rhs);
+    }
+}
+
+impl std::ops::BitAndAssign for BitSet {
+    fn bitand_assign(&mut self, rhs: Self) {
+        *self = self.intersect(&rhs);
+    }
+}
+
 impl std::ops::Sub for BitSet {
     type Output = Self;
 
@@ -159,10 +182,8 @@ impl std::fmt::Debug for BitSet {
 
 impl std::fmt::Display for BitSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for index in self.iter() {
-            f.write_fmt(format_args!("{} ", index))?;
-        }
-        Ok(())
+        let s = self.iter().map(|i| i.to_string()).collect::<Vec<_>>().join(", ");
+        f.write_fmt(format_args!("{{{s}}}"))
     }
 }
 
@@ -241,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_from_iter() {
-        let a = BitSet::from_iter(0..5);
+        let a = BitSet::from_iterator(0..5);
         assert_eq!(a.0[0], 0b11111)
     }
 }

@@ -1,5 +1,4 @@
 use crate::{
-    comment,
     target::x86::{Backend, isa::x86Instr},
 };
 

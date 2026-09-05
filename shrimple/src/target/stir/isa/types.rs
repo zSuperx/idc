@@ -1,7 +1,5 @@
 use std::fmt::Display;
 
-use registry::Id;
-
 use crate::common::builder::StructId;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]

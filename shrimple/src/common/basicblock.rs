@@ -1,4 +1,6 @@
-use std::{collections::HashSet, marker::PhantomData};
+use std::{collections::BTreeSet, marker::PhantomData};
+
+use bitset::BitSet;
 
 use super::traits::InstructionTrait;
 
@@ -9,6 +11,30 @@ pub struct BBID<I>(
     pub(crate) usize,
     pub(crate) PhantomData<I>,
 );
+
+impl<I> PartialOrd for BBID<I> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.0.partial_cmp(&other.0) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.1.partial_cmp(&other.1) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        match self.2.partial_cmp(&other.2) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
+        }
+        self.3.partial_cmp(&other.3)
+    }
+}
+
+impl<I> Ord for BBID<I> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.2.cmp(&other.2)
+    }
+}
 
 impl<I> Copy for BBID<I> {}
 impl<I> Clone for BBID<I> {
@@ -46,11 +72,16 @@ impl<I> std::fmt::Display for BBID<I> {
 #[derive(Debug, Clone)]
 pub struct BasicBlock<I: InstructionTrait> {
     pub name: &'static str,
-    pub successors: HashSet<BBID<I>>,
-    pub predecessors: HashSet<BBID<I>>,
+    pub successors: BTreeSet<BBID<I>>,
+    pub predecessors: BTreeSet<BBID<I>>,
     pub fallthrough: Option<BBID<I>>,
     pub instructions: Vec<I>,
     pub terminator: Option<I>,
+
+    pub live_in: BitSet,
+    pub live_out: BitSet,
+    pub gen_: BitSet,
+    pub kill: BitSet,
 }
 
 impl<I: InstructionTrait> BasicBlock<I> {
@@ -62,6 +93,10 @@ impl<I: InstructionTrait> BasicBlock<I> {
             fallthrough: Default::default(),
             instructions: Default::default(),
             terminator: Default::default(),
+            live_in: Default::default(),
+            live_out: Default::default(),
+            gen_: Default::default(),
+            kill: Default::default(),
         }
     }
 
@@ -73,6 +108,10 @@ impl<I: InstructionTrait> BasicBlock<I> {
             fallthrough: Default::default(),
             instructions: Default::default(),
             terminator: Default::default(),
+            live_in: Default::default(),
+            live_out: Default::default(),
+            gen_: Default::default(),
+            kill: Default::default(),
         }
     }
 

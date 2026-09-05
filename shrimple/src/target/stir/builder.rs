@@ -7,6 +7,10 @@ use crate::{
     target::stir::isa::{IRInstr, IRType},
 };
 
+pub struct IRModule {
+    function: Option<IRFunction>,
+}
+
 pub type IRBB = BBID<IRInstr>;
 pub type IRBasicBlock = BasicBlock<IRInstr>;
 pub type IRFunction = FunctionBuilder<IRInstr, IRValue, IRType>;
@@ -43,5 +47,9 @@ impl IRFunction {
                 println!("\t; !! (missing terminator)");
             }
         });
+    }
+
+    pub fn run_optimizations(&mut self) {
+        self.liveness_analysis();
     }
 }

@@ -112,38 +112,38 @@ sub printInstructionTraitImpl {
   my ($isa) = @_;
 
   my %instructions = %{$isa->{instructions}};
-  my $srcs_arms = "";
-  my $dsts_arms = "";
+  my $uses_arms = "";
+  my $defs_arms = "";
   my $term_arms = "";
   foreach my $op (sort keys %instructions) {
     my $instr = $instructions{$op};
-    my $srcs = join(", ", @{$instr->{uses}});
-    my $dsts = join(", ", @{$instr->{defs}});
+    my $uses = join(", ", @{$instr->{uses}});
+    my $defs = join(", ", @{$instr->{defs}});
     my $isTerm = "false";
     if ($instr->{term}) {
       $isTerm = "true"
     }
-    $srcs_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => vec![$srcs].into_iter()" . ",\n");
-    $dsts_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => vec![$dsts].into_iter()" . ",\n");
+    $uses_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => smallvec![$uses]" . ",\n");
+    $defs_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => smallvec![$defs]" . ",\n");
     $term_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => $isTerm" . ",\n");
   }
-  $srcs_arms =~ s/\n$//; # strip last newline
-  $dsts_arms =~ s/\n$//; # strip last newline
+  $uses_arms =~ s/\n$//; # strip last newline
+  $defs_arms =~ s/\n$//; # strip last newline
   $term_arms =~ s/\n$//; # strip last newline
 
 println <<END;
 impl InstructionTrait for $isa->{instrName} {
     type Val = $isa->{value};
 
-    fn srcs(&mut self) -> impl Iterator<Item = &mut Self::Val> {
+    fn uses(&self) -> SmallVec<[&Self::Val; 4]> {
         match self {
-$srcs_arms
+$uses_arms
         }
     }
 
-    fn dsts(&mut self) -> impl Iterator<Item = &mut Self::Val> {
+    fn defs(&self) -> SmallVec<[&Self::Val; 4]> {
         match self {
-$dsts_arms
+$defs_arms
         }
     }
 
@@ -202,6 +202,7 @@ sub printAll {
 
 // Common imports needed by all ISAs:
 use crate::common::traits::InstructionTrait;
+use smallvec::{SmallVec, smallvec};
 use $isa->{instrName}::*;
 
 // Extra imports:

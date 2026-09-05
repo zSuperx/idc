@@ -1,3 +1,5 @@
+use smallvec::{SmallVec, smallvec};
+
 use super::IRType;
 
 pub type VReg = usize;
@@ -5,17 +7,40 @@ pub type VReg = usize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IRValue {
     Reg(VReg),
-    Imm(i128),
     Ptr(VReg),
-    Arg(usize),
+    Imm(i128),
 }
 
 impl IRValue {
-    pub fn from_type(reg: VReg, ty: IRType) -> Self {
+    /// If the provided `ty` is a pointer, wraps `reg` in `IRValue::Ptr`, else `IRValue::Reg`
+    pub fn typed(reg: VReg, ty: IRType) -> Self {
         if ty.is_pointer() {
             IRValue::Ptr(reg)
         } else {
             IRValue::Reg(reg)
+        }
+    }
+
+    /// Returns any underlying registers used in this value.
+    ///
+    /// A `SmallVec` is returned to reserve the API for IRValues that may contain more than 1
+    /// register in the future, as well as being consistent with target-specific APIs.
+    pub fn getReg(&self) -> SmallVec<[VReg; 2]> {
+        match self {
+            IRValue::Reg(r) | IRValue::Ptr(r) => smallvec![*r],
+            IRValue::Imm(_) => smallvec![],
+        }
+    }
+
+    /// Rewrites all instances of `old` with `new` within the value.
+    pub fn rewriteReg(&mut self, old: VReg, new: VReg) {
+        match self {
+            IRValue::Reg(r) | IRValue::Ptr(r) => {
+                if old == *r {
+                    *r = new;
+                }
+            }
+            IRValue::Imm(_) => {}
         }
     }
 
@@ -35,7 +60,6 @@ impl IRValue {
 impl std::fmt::Display for IRValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            IRValue::Arg(n) => f.write_fmt(format_args!("%arg.{n}")),
             IRValue::Reg(r) => f.write_fmt(format_args!("%{r}")),
             IRValue::Imm(i) => f.write_fmt(format_args!("#{i}")),
             IRValue::Ptr(r) => f.write_fmt(format_args!("ptr %{r}")),

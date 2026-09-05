@@ -1,8 +1,4 @@
-use std::cell::RefCell;
-
 use crate::common::basicblock::RewriteAction;
-use crate::stir::builder::IRFunction;
-use crate::stir::isa::*;
 use crate::target::x86::Backend;
 use crate::target::x86::isa::*;
 

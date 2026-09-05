@@ -1,6 +1,7 @@
 #![allow(nonstandard_style)]
 #![allow(clippy::upper_case_acronyms)]
 #![allow(unused)]
+#![warn(unused_imports)]
 
 pub(crate) mod common;
 pub(crate) mod target;

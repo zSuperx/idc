@@ -10,6 +10,7 @@
 
 // Common imports needed by all ISAs:
 use crate::common::traits::InstructionTrait;
+use smallvec::{SmallVec, smallvec};
 use IRInstr::*;
 
 // Extra imports:
@@ -90,53 +91,53 @@ impl std::fmt::Display for IRInstr {
 impl InstructionTrait for IRInstr {
     type Val = IRValue;
 
-    fn srcs(&mut self) -> impl Iterator<Item = &mut Self::Val> {
+    fn uses(&self) -> SmallVec<[&Self::Val; 4]> {
         match self {
-            Add(ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Alloca(ty, dst) => vec![].into_iter(),
-            Br(val, truebb, falsebb) => vec![val].into_iter(),
-            Comment(s) => vec![].into_iter(),
-            Copy(ty, dst, rs1) => vec![rs1].into_iter(),
-            Getaddr(dst, base, elem_ty, idx) => vec![base, idx].into_iter(),
-            Icmp(cmp, ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Jmp(to) => vec![].into_iter(),
-            Load(ty, ptr, dst) => vec![ptr].into_iter(),
-            Ret(ty, val) => vec![val].into_iter(),
-            Retv => vec![].into_iter(),
-            Sdiv(ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Sext(to_ty, dst, from_ty, rs1) => vec![rs1].into_iter(),
-            Smul(ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Store(ty, ptr, rs1) => vec![ptr, rs1].into_iter(),
-            Sub(ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Trunc(to_ty, dst, from_ty, rs1) => vec![rs1].into_iter(),
-            Udiv(ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Umul(ty, dst, lhs, rhs) => vec![lhs, rhs].into_iter(),
-            Zext(to_ty, dst, from_ty, rs1) => vec![rs1].into_iter(),
+            Add(ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Alloca(ty, dst) => smallvec![],
+            Br(val, truebb, falsebb) => smallvec![val],
+            Comment(s) => smallvec![],
+            Copy(ty, dst, rs1) => smallvec![rs1],
+            Getaddr(dst, base, elem_ty, idx) => smallvec![base, idx],
+            Icmp(cmp, ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Jmp(to) => smallvec![],
+            Load(ty, ptr, dst) => smallvec![ptr],
+            Ret(ty, val) => smallvec![val],
+            Retv => smallvec![],
+            Sdiv(ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Sext(to_ty, dst, from_ty, rs1) => smallvec![rs1],
+            Smul(ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Store(ty, ptr, rs1) => smallvec![ptr, rs1],
+            Sub(ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Trunc(to_ty, dst, from_ty, rs1) => smallvec![rs1],
+            Udiv(ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Umul(ty, dst, lhs, rhs) => smallvec![lhs, rhs],
+            Zext(to_ty, dst, from_ty, rs1) => smallvec![rs1],
         }
     }
 
-    fn dsts(&mut self) -> impl Iterator<Item = &mut Self::Val> {
+    fn defs(&self) -> SmallVec<[&Self::Val; 4]> {
         match self {
-            Add(ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Alloca(ty, dst) => vec![dst].into_iter(),
-            Br(val, truebb, falsebb) => vec![].into_iter(),
-            Comment(s) => vec![].into_iter(),
-            Copy(ty, dst, rs1) => vec![dst].into_iter(),
-            Getaddr(dst, base, elem_ty, idx) => vec![dst].into_iter(),
-            Icmp(cmp, ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Jmp(to) => vec![].into_iter(),
-            Load(ty, ptr, dst) => vec![dst].into_iter(),
-            Ret(ty, val) => vec![].into_iter(),
-            Retv => vec![].into_iter(),
-            Sdiv(ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Sext(to_ty, dst, from_ty, rs1) => vec![dst].into_iter(),
-            Smul(ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Store(ty, ptr, rs1) => vec![].into_iter(),
-            Sub(ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Trunc(to_ty, dst, from_ty, rs1) => vec![dst].into_iter(),
-            Udiv(ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Umul(ty, dst, lhs, rhs) => vec![dst].into_iter(),
-            Zext(to_ty, dst, from_ty, rs1) => vec![dst].into_iter(),
+            Add(ty, dst, lhs, rhs) => smallvec![dst],
+            Alloca(ty, dst) => smallvec![dst],
+            Br(val, truebb, falsebb) => smallvec![],
+            Comment(s) => smallvec![],
+            Copy(ty, dst, rs1) => smallvec![dst],
+            Getaddr(dst, base, elem_ty, idx) => smallvec![dst],
+            Icmp(cmp, ty, dst, lhs, rhs) => smallvec![dst],
+            Jmp(to) => smallvec![],
+            Load(ty, ptr, dst) => smallvec![dst],
+            Ret(ty, val) => smallvec![],
+            Retv => smallvec![],
+            Sdiv(ty, dst, lhs, rhs) => smallvec![dst],
+            Sext(to_ty, dst, from_ty, rs1) => smallvec![dst],
+            Smul(ty, dst, lhs, rhs) => smallvec![dst],
+            Store(ty, ptr, rs1) => smallvec![],
+            Sub(ty, dst, lhs, rhs) => smallvec![dst],
+            Trunc(to_ty, dst, from_ty, rs1) => smallvec![dst],
+            Udiv(ty, dst, lhs, rhs) => smallvec![dst],
+            Umul(ty, dst, lhs, rhs) => smallvec![dst],
+            Zext(to_ty, dst, from_ty, rs1) => smallvec![dst],
         }
     }
 

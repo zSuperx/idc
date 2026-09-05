@@ -45,6 +45,7 @@ fn main() {
     match CFG.action {
         Action::EmitIr => {
             for function in functions.iter_mut() {
+                function.run_optimizations();
                 function.print(CFG.verbose);
                 println!();
             }
