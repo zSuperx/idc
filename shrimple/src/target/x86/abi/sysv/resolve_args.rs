@@ -20,7 +20,9 @@ impl Backend {
                 let llty = LLType::fromIRType(arg_ty);
                 let dst = match curr_reg {
                     Some(r) => x86Value::reg(*r, llty),
-                    None => x86Value::memDisp(Reg::BP, 16 + (8 * i.saturating_sub(6) as i128), llty),
+                    None => {
+                        x86Value::memDisp(Reg::BP, 16 + (8 * i.saturating_sub(6) as i128), llty)
+                    }
                 };
                 self.v2p.insert(*arg_val, dst);
                 curr_reg = registers.next();
@@ -28,5 +30,12 @@ impl Backend {
         }
 
         // stir_function.args = new_args;
+    }
+
+    pub(crate) fn lower_function_call(&mut self, function_call: IRInstr) {
+        let builder = self
+            .builder
+            .as_mut()
+            .expect("Lowering must have started by this point");
     }
 }

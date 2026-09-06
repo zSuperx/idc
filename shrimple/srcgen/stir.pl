@@ -48,6 +48,17 @@ my $isa = {
     zext  => $resizeOp,
     trunc => $resizeOp,
 
+    call => {
+      args => [ "ty:$TY", "dst:$VAL", "name:&'static str", "args:SmallVec<[$VAL; 4]>" ],
+      defs => [ "dst" ],
+      uses_raw => "args.iter().collect()", # args is itself a smallvec, so use it raw
+      fmt_raw => q~{
+              let args_str = args.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(",");
+              f.write_fmt(format_args!("{dst} = {name}({args_str})"))
+          }
+      ~,
+    },
+
     alloca => {
       args => [ "ty:$TY", "dst:$VAL" ],
       defs => [ "dst" ],

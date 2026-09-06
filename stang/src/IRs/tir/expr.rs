@@ -11,10 +11,6 @@ impl TirExpr {
     pub fn new(kind: TirExprKind, ty: TypeId) -> Self {
         Self { kind, ty }
     }
-
-    pub fn is_valid_lvalue(&self) -> bool {
-        matches!(self.kind, TirExprKind::ValueOf(..) | TirExprKind::Load { .. })
-    }
 }
 
 #[derive(Debug, Clone)]

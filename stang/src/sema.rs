@@ -51,11 +51,14 @@ impl Function {
             body,
         }: ParsedFunction,
     ) -> Self {
+        let mut env = Env::default();
+        env.push_filled_scope(global_state().globals.clone());
+
         let mut function = Self {
             name,
+            env,
             symbol: global_state().globals[name.inner],
             return_type: resolve_type(&returns),
-            env: Default::default(),
             loop_labels: Default::default(),
             loop_depth: 0,
             symbol_table: Default::default(),
@@ -485,19 +488,27 @@ impl Function {
                 TirExpr::new(kind, ty)
             }
             HirExpr::Call { callee, args } => {
-                // TODO: we can't check if the user is passing in the right types of arguments until
-                // we add the callee to the global symbol table
                 let callee = Box::new(self.check_rvalue_expr(callee, hint));
-                let Type::Function { returns, .. } = *callee.ty else {
+                let Type::Function { return_ty, arg_tys } = callee.ty.lookup() else {
                     die!("Function callee does not resolve to a function type: {span}");
                 };
 
-                let args = args
+                let args: Vec<_> = args
                     .iter()
                     .map(|a| self.check_rvalue_expr(a, None))
                     .collect();
+
+                for (arg, expected_arg_ty) in args.iter().zip(arg_tys.iter()) {
+                    if arg.ty != *expected_arg_ty {
+                        die!(
+                            "Mismatched argument type passed to function. Expected {expected_arg_ty} but got {}: {span}",
+                            arg.ty
+                        )
+                    }
+                }
+                let ty = *return_ty;
                 let kind = TirExprKind::Call { callee, args };
-                TirExpr::new(kind, returns)
+                TirExpr::new(kind, ty)
             }
             HirExpr::SizeOfTy { ty } => {
                 let ty_size = resolve_type(ty).bytes();

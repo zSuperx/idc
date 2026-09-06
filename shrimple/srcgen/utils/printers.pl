@@ -54,11 +54,14 @@ sub createFmtArm {
   my ($op, $instr) = @_;
 
   my $base = namedArmBase($op, $instr);
-  
-  my $fmt = $instr->{fmt};
+
+  my $fmt = defined $instr->{fmt_raw}
+    ? $instr->{fmt_raw}
+    : "f.write_fmt(format_args!(\"$instr->{fmt}\"))";
+
   $fmt =~ s/{name}/$op/g;
 
-  return "$base => f.write_fmt(format_args!(\"$fmt\")),"
+  return "$base => $fmt,";
 }
 
 sub printEnum {
@@ -117,14 +120,26 @@ sub printInstructionTraitImpl {
   my $term_arms = "";
   foreach my $op (sort keys %instructions) {
     my $instr = $instructions{$op};
-    my $uses = join(", ", @{$instr->{uses}});
-    my $defs = join(", ", @{$instr->{defs}});
+
+    # For defs & uses
+    # If the raw variant is provided, use it directly.
+    # Otherwise, wrap it in a smallvec![] with commas
+
+    my $uses = defined $instr->{uses_raw}
+      ? $instr->{uses_raw}
+      : "smallvec![" . join(", ", @{$instr->{uses}}) . "]";
+
+    my $defs = defined $instr->{defs_raw}
+      ? $instr->{defs_raw}
+      : "smallvec![" . join(", ", @{$instr->{defs}}) . "]";
+
     my $isTerm = "false";
     if ($instr->{term}) {
       $isTerm = "true"
     }
-    $uses_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => smallvec![$uses]" . ",\n");
-    $defs_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => smallvec![$defs]" . ",\n");
+
+    $uses_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => " . $uses . ",\n");
+    $defs_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => " . $defs . ",\n");
     $term_arms .= ("$TAB$TAB$TAB" . namedArmBase($op, $instr) . " => $isTerm" . ",\n");
   }
   $uses_arms =~ s/\n$//; # strip last newline

@@ -27,8 +27,8 @@ pub enum Type {
         fields: Vec<(&'static str, TypeId)>,
     },
     Function {
-        args: Vec<TypeId>,
-        returns: TypeId,
+        arg_tys: Vec<TypeId>,
+        return_ty: TypeId,
     },
     Pointer(TypeId),
 }
@@ -124,7 +124,7 @@ impl std::fmt::Display for Type {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Type::Base { name, .. } => format_args!("{}", *name),
-            Type::Function { args, returns } => {
+            Type::Function { arg_tys: args, return_ty: returns } => {
                 format_args!(
                     "Fn({}) -> {}",
                     args.iter()

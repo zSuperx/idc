@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use smallvec::{SmallVec, smallvec};
+
 use super::reg::*;
 use super::types::*;
 
@@ -73,11 +75,41 @@ impl x86Value {
         }
     }
 
-    pub fn getReg(&self) -> Reg {
-        let x86Value::Reg { name, .. } = self else {
-            panic!("This method can only be called on registers");
-        };
-        *name
+    pub fn getReg(&self) -> SmallVec<[Reg; 2]> {
+        match self {
+            x86Value::Imm(_) => smallvec![],
+            x86Value::Reg { name, .. } => smallvec![*name],
+            x86Value::Mem { base, index, .. } => {
+                let mut ret = smallvec![*base];
+                if let Some(index) = *index {
+                    ret.push(index);
+                }
+                ret
+            }
+            x86Value::CC(..) => smallvec![],
+        }
+    }
+
+    pub fn rewriteReg(&mut self, old: Reg, new: Reg) {
+        match self {
+            x86Value::Imm(_) => {}
+            x86Value::Reg { name, .. } => {
+                if old == *name {
+                    *name = new;
+                }
+            }
+            x86Value::Mem { base, index, .. } => {
+                if *base == old {
+                    *base = new;
+                }
+                if let Some(inner) = index
+                    && *inner == old
+                {
+                    *inner = new;
+                }
+            }
+            x86Value::CC(..) => {}
+        }
     }
 
     pub const fn memDisp(base: Reg, disp: i128, ty: LLType) -> x86Value {

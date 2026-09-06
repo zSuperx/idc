@@ -254,15 +254,15 @@ impl Backend {
                             IRValue::Reg(_) | IRValue::Ptr(_) => {
                                 let index_val = self.lowerToReg(mcf, index, LLType::I64);
                                 x86Value::memFull(
-                                    base.getReg(),
-                                    Some(index_val.getReg()),
+                                    base.getReg()[0],
+                                    Some(index_val.getReg()[0]),
                                     llty.bytes(),
                                     0,
                                     llty,
                                 )
                             }
                             IRValue::Imm(i) => {
-                                x86Value::memFull(base.getReg(), None, llty.bytes(), *i, llty)
+                                x86Value::memFull(base.getReg()[0], None, llty.bytes(), *i, llty)
                             }
                         };
                         mcf.emit(Lea(dst, addr));
@@ -308,6 +308,7 @@ impl Backend {
                             _ => unreachable!(),
                         }
                     }
+                    IRInstr::Call(ty, dst, name, args) => todo!("Translate function calls"),
                 }
             }
         });

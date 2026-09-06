@@ -19,16 +19,8 @@ impl<K: Hash + Eq, V: Copy> Env<K, V> {
         Self::default()
     }
 
-    pub fn insert_first(&mut self, name: K, val: V) -> Option<V> {
-        self.scopes.first_mut().unwrap().insert(name, val)
-    }
-
     pub fn insert(&mut self, name: K, val: V) -> Option<V> {
         self.scopes.last_mut().unwrap().insert(name, val)
-    }
-
-    pub fn get_first(&self, name: &K) -> Option<V> {
-        self.scopes.first().unwrap().get(name).copied()
     }
 
     pub fn get(&self, name: &K) -> Option<V> {
@@ -42,6 +34,10 @@ impl<K: Hash + Eq, V: Copy> Env<K, V> {
 
     pub fn push_scope(&mut self) {
         self.scopes.push(HashMap::new());
+    }
+
+    pub fn push_filled_scope(&mut self, map: HashMap<K, V>) {
+        self.scopes.push(map);
     }
 
     pub fn pop_scope(&mut self) {

@@ -21,6 +21,56 @@ pub enum Reg {
     Virt(usize),
 }
 
+impl From<usize> for Reg {
+    fn from(value: usize) -> Self {
+        use Reg::*;
+        match value {
+            0 => A,
+            1 => B,
+            2 => C,
+            3 => D,
+            4 => SI,
+            5 => DI,
+            6 => SP,
+            7 => BP,
+            8 => R8,
+            9 => R9,
+            10 => R10,
+            11 => R11,
+            12 => R12,
+            13 => R13,
+            14 => R14,
+            15 => R15,
+            x => Virt(x),
+        }
+    }
+}
+
+impl Into<usize> for Reg {
+    fn into(self) -> usize {
+        use Reg::*;
+        match self {
+            A => 0,
+            B => 1,
+            C => 2,
+            D => 3,
+            SI => 4,
+            DI => 5,
+            SP => 6,
+            BP => 7,
+            R8 => 8,
+            R9 => 9,
+            R10 => 10,
+            R11 => 11,
+            R12 => 12,
+            R13 => 13,
+            R14 => 14,
+            R15 => 15,
+            Virt(x) => x + 16,
+        }
+    }
+}
+
 impl Reg {
     pub fn sized_print(&self, f: &mut std::fmt::Formatter<'_>, bits: usize) -> std::fmt::Result {
         let names = match self {

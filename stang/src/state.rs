@@ -174,7 +174,7 @@ pub fn resolve_type(s @ Spanned { inner: ty, span }: &Spanned<TypeId>) -> TypeId
             };
             *id
         }
-        Type::Function { args, returns } => todo!(),
+        Type::Function { arg_tys: args, return_ty: returns } => todo!(),
         Type::Pointer(id) => {
             let inner_ty = resolve_type(&Spanned::new(*id, *span));
             add_type(Type::Pointer(inner_ty))
@@ -220,8 +220,8 @@ fn resolve_global_names(Spanned { inner: obj, span }: &Spanned<HirObj>) {
             }
             let return_ty = resolve_type(returns);
             let function_ty = Type::Function {
-                args: arg_types,
-                returns: return_ty,
+                arg_tys: arg_types,
+                return_ty,
             };
             let ty = add_type(function_ty);
             let symbol = next_symbol(name.inner);

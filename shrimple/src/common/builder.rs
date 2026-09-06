@@ -13,7 +13,6 @@
 use std::cell::{RefCell};
 use std::collections::{BTreeMap, HashSet};
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 
 use registry::{Id, Registry};
@@ -232,14 +231,6 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
         self.blocks[&this].terminator.is_some()
     }
 
-    pub fn create_dfs<'a>(&'a mut self) -> FunctionDfs<'a, I, V, T> {
-        FunctionDfs {
-            stack: vec![self.entrypoint],
-            seen: Default::default(),
-            builder: self,
-        }
-    }
-
     pub fn dfs_short_circuit(
         &mut self,
         mut visitor: impl FnMut(&mut Self, BBID<I>) -> bool,
@@ -295,49 +286,5 @@ impl<I: InstructionTrait, V, T> FunctionBuilder<I, V, T> {
                 }
             }
         }
-    }
-}
-
-pub struct FunctionDfs<'a, I: InstructionTrait, V, T> {
-    builder: &'a mut FunctionBuilder<I, V, T>,
-    stack: Vec<BBID<I>>,
-    seen: HashSet<BBID<I>>,
-}
-
-impl<'a, I: InstructionTrait, V, T> DerefMut for FunctionDfs<'a, I, V, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.builder
-    }
-}
-
-impl<'a, I: InstructionTrait, V, T> Deref for FunctionDfs<'a, I, V, T> {
-    type Target = FunctionBuilder<I, V, T>;
-
-    fn deref(&self) -> &Self::Target {
-        self.builder
-    }
-}
-
-impl<'a, I: InstructionTrait, V, T> FunctionDfs<'a, I, V, T> {
-    pub fn next(&mut self) -> Option<BBID<I>> {
-        let Some(id) = self.stack.pop() else {
-            return None;
-        };
-        self.seen.insert(id);
-
-        let block = self.builder.blocks.get_mut(&id).unwrap();
-        for succ in block.successors.iter() {
-            if !self.seen.contains(succ) && Some(*succ) != block.fallthrough {
-                self.stack.push(*succ);
-            }
-        }
-
-        if let Some(ft) = block.fallthrough {
-            if !self.seen.contains(&ft) {
-                self.stack.push(ft);
-            }
-        }
-
-        Some(id)
     }
 }

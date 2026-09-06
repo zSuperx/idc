@@ -1,3 +1,8 @@
+//! This module defines the [`BasicBlock`] struct, which represents a bundle of instructions
+//! terminated by a control-flow-inducing instruction.
+//!
+//! [`BBID`] is meant to be an index marker for `BasicBlock`s. Hence, [`FunctionBuilder`] and all
+//! its implementations use `BBID` as a key into a map of `BasicBlock`s. 
 use std::{collections::BTreeSet, marker::PhantomData};
 
 use bitset::BitSet;
@@ -115,7 +120,10 @@ impl<I: InstructionTrait> BasicBlock<I> {
         }
     }
 
-    pub fn rewrite_instructions(&mut self, mut rewriter: impl FnMut(&I) -> RewriteAction<I>) {
+    /// This function calls the provided `rewriter` closure on each instruction within the
+    /// `BasicBlock`. The closure returns a [`RewriteAction`], which this function uses to determine
+    /// how to proceed with the rewrite.
+    pub fn rewrite(&mut self, mut rewriter: impl FnMut(&I) -> RewriteAction<I>) {
         let old = std::mem::take(&mut self.instructions);
         for i in old {
             match rewriter(&i) {

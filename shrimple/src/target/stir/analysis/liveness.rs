@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use bitset::BitSet;
 
@@ -8,7 +8,11 @@ use crate::{
 };
 
 impl IRFunction {
-    /// Should return a ???
+    /// Performs liveness analysis on `self` and populates each `BasicBlock`'s LIVE_IN and LIVE_OUT
+    /// sets.
+    ///
+    /// Based off the standard dataflow equation described on
+    /// [Wikipedia](https://en.wikipedia.org/wiki/Live-variable_analysis).
     pub(crate) fn liveness_analysis(&mut self) {
         let mut exitpoints = self.find_leaf_blocks();
         let mut worklist = vec![];
@@ -65,9 +69,13 @@ impl IRFunction {
         }
 
         self.dfs(|self_, curr_id| {
-            println!("{curr_id}");
-            println!("\tLIVE_IN: {}", &LIVE_IN[&curr_id]);
-            println!("\tLIVE_OUT: {}", &LIVE_OUT[&curr_id]);
+            let curr = self_.blocks.get_mut(&curr_id).unwrap();
+            curr.live_in = std::mem::take(LIVE_IN.get_mut(&curr_id).unwrap());
+            curr.live_out = std::mem::take(LIVE_OUT.get_mut(&curr_id).unwrap());
         });
+    }
+
+    fn verify_liveness(&mut self) {
+        todo!()
     }
 }
